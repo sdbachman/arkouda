@@ -94,7 +94,8 @@ def reshape(obj : pdarray, newshape : Union[numeric_scalars, tuple]) -> pdarray:
             n = int(initial_size/m)
           if m*n != initial_size:
             raise ValueError("size mismatch, 2D dimensions must result in array of equivalent size: {} != {}".format(obj.size,m*n))
-          rep_msg = generic_msg(cmd='reshape2D', args=f"{obj.name} {m} {n}")
+#          rep_msg = generic_msg(cmd='reshape2D', args=f"{obj.name} {m} {n}")
+          rep_msg = generic_msg(cmd='reshape2D', args={"name": obj.name, "m": m, "n": n})
           return create_pdarray2D(rep_msg)
         elif len(newshape) == 3:
           m = newshape[0]
@@ -114,7 +115,8 @@ def reshape(obj : pdarray, newshape : Union[numeric_scalars, tuple]) -> pdarray:
               final_shape.append(dim)
           if np.prod(final_shape) != initial_size:
             raise ValueError("size mismatch, 3D dimensions must result in array of equivalent size: {} != {}".format(initial_size,np.prod(final_shape)))
-          rep_msg = generic_msg(cmd='reshape3D', args=f"{obj.name} {m} {n} {p}")
+#          rep_msg = generic_msg(cmd='reshape3D', args=f"{obj.name} {m} {n} {p}")
+          rep_msg = generic_msg(cmd='reshape2D', args={"name": obj.name, "m": m, "n": n, "p": p})
           return create_pdarray3D(rep_msg) 
         elif len(newshape) == 4:
           m = newshape[0]
@@ -135,15 +137,17 @@ def reshape(obj : pdarray, newshape : Union[numeric_scalars, tuple]) -> pdarray:
               final_shape.append(dim)
           if np.prod(final_shape) != initial_size:
             raise ValueError("size mismatch, 4D dimensions must result in array of equivalent size: {} != {}".format(initial_size,np.prod(final_shape)))
-          rep_msg = generic_msg(cmd='reshape4D', args=f"{obj.name} {m} {n} {p} {q}")
+#          rep_msg = generic_msg(cmd='reshape4D', args=f"{obj.name} {m} {n} {p} {q}")
+          rep_msg = generic_msg(cmd='reshape2D', args={"name": obj.name, "m": m, "n": n, "p": p, "q": q})
           return create_pdarray4D(rep_msg)           
 
     else:
         if newshape == -1 or newshape == initial_size:
-            rep_msg = generic_msg(cmd='reshape1D', args=f"{obj.name}")
-            return create_pdarray2D(rep_msg)
+#            rep_msg = generic_msg(cmd='reshape1D', args=f"{obj.name}")
+          rep_msg = generic_msg(cmd='reshape1D', args={"name": obj.name})
+          return create_pdarray2D(rep_msg)
         else:
-            raise ValueError("size mismatch, resizing to 1D must either be -1 or array size: provided: {} array size: {}".format(newshape, obj.size))
+          raise ValueError("size mismatch, resizing to 1D must either be -1 or array size: provided: {} array size: {}".format(newshape, obj.size))
 
 def flatten(obj : pdarray) -> pdarray:
     """
@@ -162,6 +166,7 @@ def flatten(obj : pdarray) -> pdarray:
 
     """
 
-    rep_msg = generic_msg(cmd='reshape1D', args=f"{obj.name}")
+#    rep_msg = generic_msg(cmd='reshape1D', args=f"{obj.name}")
+    rep_msg = generic_msg(cmd='reshape1D', args={"name": obj.name})
     return create_pdarray2D(rep_msg)
 

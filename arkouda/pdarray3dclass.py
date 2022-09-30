@@ -42,7 +42,7 @@ class pdarray3D(pdarray):
                 # Interpret negative key as offset from end of array
                 key += self.size
             if (key >= 0 and key < self.size):
-                repMsg = generic_msg(cmd="[int3d]", args="{} {}".format(self.name, key))
+                repMsg = generic_msg(cmd="[int3d]", args={"name": self.name, "key": key})
                 return create_pdarray(repMsg)
             else:
                 raise IndexError("[int] {} is out of bounds with size {}".format(orig_key,self.size))
@@ -84,8 +84,7 @@ class pdarray3D(pdarray):
             if self.size != other.size:
                 raise ValueError("size mismatch {} {}".format(self.size,other.size))
             cmd = "binopvv3d"
-            args= "{} {} {}".format(op, self.name, other.name)
-            repMsg = generic_msg(cmd=cmd,args=args)
+            repMsg = generic_msg(cmd=cmd, args={"op": op, "a": self.name, "b": other.name})
             return create_pdarray3D(repMsg)
         # pdarray binop scalar
         dt = resolve_scalar_dtype(other)
@@ -111,7 +110,7 @@ def create_pdarray3D(repMsg : str) -> pdarray3D:
                   "itemsize: {}").format(name, mydtype, size, ndim, shape, itemsize))
     return pdarray3D(name, dtype(mydtype), size, ndim, shape, itemsize)
 
-def array3D(val, m, n, p) -> Union[pdarray, Strings]:
+def array3D(val, m, n, p, dtype: Union[np.dtype, type, str] = float64) -> Union[pdarray, Strings]:
     """
     Generate a 3D pdarray that is of size `m x n x p` and initialized to the
     value `val`.
@@ -126,17 +125,20 @@ def array3D(val, m, n, p) -> Union[pdarray, Strings]:
         The `n` dimension of the array to create
     p : int_scalars
         The `p` dimension of the array to create
+    dtype: all_scalars
+        Resulting array type, default float64
 
     Returns
     -------
     pdarray
-        A pdarray instance stored on arkouda server
-        
+        array of the requested size (m,n) and dtype filled with `fill_value`
+
     Raises
     ------
     TypeError
         Raised if a is not a pdarray, np.ndarray, or Python Iterable such as a
-        list, array, tuple, or deque
+        list, array, tuple, or deque, or if the supplied dtype is not supported,
+        or if the size parameter is neither an int nor a str that is parseable to an int.
 
     See Also
     --------
@@ -161,14 +163,7 @@ def array3D(val, m, n, p) -> Union[pdarray, Strings]:
     args = ""
     from arkouda.client import maxTransferBytes
     # Only rank 3 arrays currently supported
-    if isinstance(val, bool):
-        args = f"bool {val} {m} {n} {p}"
-    elif isinstance(val, int):
-        args = f"int64 {val} {m} {n} {p}"
-    elif isinstance(val, float):
-        args = f"float64 {val} {m} {n} {p}"
-
-    rep_msg = generic_msg(cmd='array3d', args=args)
+    rep_msg = generic_msg(cmd='array3d', args={"dtype": cast(np.dtype, dtype).name, "val": val, "m": m, "n": n, "p": p})
     return create_pdarray3D(rep_msg)
 
 
@@ -230,73 +225,6 @@ def randint3D(low : numeric_scalars, high : numeric_scalars,
     lowstr = NUMBER_FORMAT_STRINGS[dtype.name].format(low)
     highstr = NUMBER_FORMAT_STRINGS[dtype.name].format(high)
 
-    repMsg = generic_msg(cmd='randint3d', args='{} {} {} {} {} {} {}'.\
-                         format(dtype.name, lowstr, highstr, m, n, p, seed))
+    repMsg = generic_msg(cmd='randint3d', args={"dtype": cast(np.dtype, dtype).name, "low": lowstr, "high": highstr, "m": m, "n": n, "p": p, "seed": seed})
     return create_pdarray3D(repMsg)
 
-#def reshape(obj : pdarray, newshape : Union[numeric_scalars, tuple]) -> pdarray:
-#    """
-#    Reshape
-#
-#    Parameters
-#    ----------
-#    obj : pdarray
-#        The pdarray to reshape.
-#    newshape : Union[numeric_scalars, tuple]
-#        The shape to resize the array to. This could either be a single
-#        value to reshape to a 1D array or a tuple of 2 values to reshape 
-#        to a 2D array.
-#        
-#    Returns
-#    -------
-#    pdarray
-#        A new pdarray containing the same elements of `obj`, but with a
-#        new domain.
-#        
-#    Raises
-#    ------
-#    ValueError
-#        Raised if `newshape` contains more than 2 elements or the supplied
-#        new shape can't fit all elements of original array.
-#
-#    Notes
-#    -----
-#    Setting one of the values in `newshape` to `-1` will infer the correct
-#    length to pass to ensure that the new array fits the correct number of
-#    elements.
-#
-#    Examples
-#    --------
-#    >>> a = ak.array([1,2,3,4])
-#    >>> ak.reshape(a, (2,2))
-#    array([[1, 2],
-#           [3, 4]])
-#    >>> ak.reshape(a, (-1,1))
-#    array([[1],
-#           [2],
-#           [3],
-#           [4]]))
-#    """
-#    initial_size = obj.size
-#    m = 0
-#    n = 0
-#
-#    if isinstance(newshape, tuple):
-#        if len(newshape) != 2:            
-#            raise ValueError("more than 2 dimensions provided for newshape: {}".format(len(newshape)))
-#        m = newshape[0]
-#        n = newshape[1]
-#        if m == -1:
-#            m = int(initial_size/n)
-#        if n == -1:
-#            n = int(initial_size/m)
-#        if m*n != initial_size:
-#            raise ValueError("size mismatch, 2D dimensions must result in array of equivalent size: {} != {}".format(obj.size,m*n))
-#        rep_msg = generic_msg(cmd='reshape2D', args=f"{obj.name} {m} {n}")
-#        return create_pdarray2D(rep_msg)
-#    else:
-#        if newshape == -1 or newshape == initial_size:
-#            rep_msg = generic_msg(cmd='reshape1D', args=f"{obj.name}")
-#            return create_pdarray2D(rep_msg)
-#        else:
-#            raise ValueError("size mismatch, resizing to 1D must either be -1 or array size: provided: {} array size: {}".format(newshape, obj.size))

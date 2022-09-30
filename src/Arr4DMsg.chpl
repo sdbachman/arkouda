@@ -17,8 +17,9 @@ module Arr4DMsg {
   private config const logLevel = ServerConfig.logLevel;
   const randLogger = new Logger(logLevel);
 
-  proc array4DMsg(cmd: string, args: string, st: borrowed SymTab): MsgTuple throws {
-    var (dtypeBytes, val, mStr, nStr, pStr, qStr) = args.splitMsgToTuple(" ", 6);
+  proc array4DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+    var msgArgs = parseMessageArgs(args, argSize);
+    var val = msgArgs.getValueOf("val");
     var dtype = DType.UNDEF;
     var m: int;
     var n: int;
@@ -27,11 +28,11 @@ module Arr4DMsg {
     var rname:string = "";
 
     try {
-      dtype = str2dtype(dtypeBytes);
-      m = mStr: int;
-      n = nStr: int;
-      p = pStr: int;
-      q = qStr: int;
+      dtype = str2dtype(msgArgs.getValueOf("dtype"));
+      m = msgArgs.get("m").getIntValue();
+      n = msgArgs.get("n").getIntValue();
+      p = msgArgs.get("p").getIntValue();
+      q = msgArgs.get("q").getIntValue();
     } catch {
       var errorMsg = "Error parsing/decoding either dtypeBytes, m, n, p, or q";
       gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
@@ -72,23 +73,23 @@ module Arr4DMsg {
     return new MsgTuple(msg, msgType);
   }
 
-  proc randint4DMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+  proc randint4DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
-    // split request into fields
-    var (dtypeStr,aMinStr,aMaxStr,mStr,nStr,pStr,qStr,seed) = payload.splitMsgToTuple(8);
-    var dtype = str2dtype(dtypeStr);
-    var m = mStr:int;
-    var n = nStr:int;
-    var p = pStr:int;
-    var q = qStr:int;
+    var msgArgs = parseMessageArgs(args, argSize);
+    var dtype = str2dtype(msgArgs.getValueOf("dtype"));
+    var m = msgArgs.get("m").getIntValue();
+    var n = msgArgs.get("n").getIntValue();
+    var p = msgArgs.get("p").getIntValue();
+    var q = msgArgs.get("q").getIntValue();
     var rname = st.nextName();
 
     select (dtype) {
       when (DType.Int64) {
         overMemLimit(8*m*n*p*q);
-        var aMin = aMinStr:int;
-        var aMax = aMaxStr:int;
+        var aMin = msgArgs.get("low").getIntValue();
+        var aMax = msgArgs.get("high").getIntValue();
+        var seed = msgArgs.getValueOf("seed");
 
         var entry = new shared SymEntry4D(m, n, p, q, int);
         var localA: [{0..#m, 0..#n, 0..#p, 0..#q}] int;
@@ -97,9 +98,10 @@ module Arr4DMsg {
         fillInt(entry.a, aMin, aMax, seed);
       }
       when (DType.Float64) {
+        var seed = msgArgs.getValueOf("seed");
         overMemLimit(8*m*n*p*q);
-        var aMin = aMinStr:real;
-        var aMax = aMaxStr:real;
+        var aMin = msgArgs.get("low").getRealValue();
+        var aMax = msgArgs.get("high").getRealValue();
 
         var entry = new shared SymEntry4D(m, n, p, q, real);
         var localA: [{0..#m, 0..#n, 0..#p, 0..#q}] real;
@@ -108,6 +110,7 @@ module Arr4DMsg {
         fillReal(entry.a, aMin, aMax, seed);
       }
       when (DType.Bool) {
+        var seed = msgArgs.getValueOf("seed");
         overMemLimit(8*m*n*p*q);
 
         var entry = new shared SymEntry4D(m, n, p, q, bool);
@@ -127,12 +130,14 @@ module Arr4DMsg {
     return new MsgTuple(repMsg, MsgType.NORMAL);
   }
 
-  proc binopvv4DMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+  proc binopvv4DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
 
-    // split request into fields
-    var (op, aname, bname) = payload.splitMsgToTuple(3);
+    var msgArgs = parseMessageArgs(args, argSize);
+    const op = msgArgs.getValueOf("op");
+    var aname = msgArgs.getValueOf("a");
+    var bname = msgArgs.getValueOf("b");
 
     var rname = st.nextName();
     var left: borrowed GenSymEntry = getGenericTypedArrayEntry(aname, st);
