@@ -649,6 +649,7 @@ def generic_msg(
     confirmation, warn message, or error message. A memoryview response
     corresponds to an Arkouda array output as a numpy array.
     """
+    print("Running " + cmd)
     global socket, pspStr, connected, verbose
 
     if not connected:

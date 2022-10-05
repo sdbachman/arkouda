@@ -23,11 +23,11 @@ module Reshape {
   const randLogger = new Logger(logLevel);
 
 //  proc reshape1DMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
-  proc reshape1DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+  proc reshape1DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
 //    var (name) = payload.splitMsgToTuple(1); // split request into fields
-    var msgArgs = parseMessageArgs(args, argSize);
+    var msgArgs = parseMessageArgs(payload, argSize);
     var name = msgArgs.getValueOf("name");
 
     var rname = st.nextName();
@@ -59,14 +59,14 @@ module Reshape {
   }
 
 //  proc reshape2DMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
-  proc reshape2DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+  proc reshape2DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
 //    var (name, mStr, nStr) = payload.splitMsgToTuple(3); // split request into fields
 //
 //    var m = mStr:int;
 //    var n = nStr:int;
-    var msgArgs = parseMessageArgs(args, argSize);
+    var msgArgs = parseMessageArgs(payload, argSize);
     var name = msgArgs.getValueOf("name");
     var m = msgArgs.get("m").getIntValue();
     var n = msgArgs.get("n").getIntValue();
@@ -101,7 +101,7 @@ module Reshape {
   }
 
 //  proc reshape3DMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
-  proc reshape3DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+  proc reshape3DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
 //    var (name, mStr, nStr, pStr) = payload.splitMsgToTuple(4); // split request into fields
@@ -109,7 +109,7 @@ module Reshape {
 //    var m = mStr:int;
 //    var n = nStr:int;
 //    var p = pStr:int;
-    var msgArgs = parseMessageArgs(args, argSize);
+    var msgArgs = parseMessageArgs(payload, argSize);
     var name = msgArgs.getValueOf("name");
     var m = msgArgs.get("m").getIntValue();
     var n = msgArgs.get("n").getIntValue();
@@ -144,7 +144,7 @@ module Reshape {
   }
 
 //  proc reshape4DMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
-  proc reshape4DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+  proc reshape4DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
 //    var (name, mStr, nStr, pStr, qStr) = payload.splitMsgToTuple(5); // split request into fields
@@ -153,7 +153,7 @@ module Reshape {
 //    var n = nStr:int;
 //    var p = pStr:int;
 //    var q = qStr:int;
-    var msgArgs = parseMessageArgs(args, argSize);
+    var msgArgs = parseMessageArgs(payload, argSize);
     var name = msgArgs.getValueOf("name");
     var m = msgArgs.get("m").getIntValue();
     var n = msgArgs.get("n").getIntValue();
