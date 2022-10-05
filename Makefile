@@ -160,15 +160,15 @@ $(ARROW_O): $(ARROW_CPP) $(ARROW_H)
 	make compile-arrow-cpp
 
 CHPL_MINOR := $(shell $(CHPL) --version | sed -n "s/chpl version 1\.\([0-9]*\).*/\1/p")
-CHPL_VERSION_OK := $(shell test $(CHPL_MINOR) -ge 26 && echo yes)
-CHPL_VERSION_WARN := $(shell test $(CHPL_MINOR) -le 26 && echo yes)
+CHPL_VERSION_OK := $(shell test $(CHPL_MINOR) -ge 27 && echo yes)
+CHPL_VERSION_WARN := $(shell test $(CHPL_MINOR) -le 27 && echo yes)
 .PHONY: check-chpl
 check-chpl:
 ifneq ($(CHPL_VERSION_OK),yes)
-	$(error Chapel 1.26.0 or newer is required)
+	$(error Chapel 1.27.0 or newer is required)
 endif
 ifeq ($(CHPL_VERSION_WARN),yes)
-	$(warning Chapel 1.27.0 or newer is recommended)
+	$(warning Chapel 1.28.0 or newer is recommended)
 endif
 
 ZMQ_CHECK = $(DEP_INSTALL_DIR)/checkZMQ.chpl
@@ -185,10 +185,7 @@ check-hdf5: $(HDF5_CHECK)
 	$(DEP_INSTALL_DIR)/$@ -nl 1
 	@rm -f $(DEP_INSTALL_DIR)/$@ $(DEP_INSTALL_DIR)/$@_real
 
-RE2_CHECK = $(DEP_INSTALL_DIR)/checkRE2_125.chpl
-ifneq ($(shell expr $(CHPL_MINOR) \>= 25),1)
-	RE2_CHECK = $(DEP_INSTALL_DIR)/checkRE2_124.chpl
-endif
+RE2_CHECK = $(DEP_INSTALL_DIR)/checkRE2.chpl
 check-re2: $(RE2_CHECK)
 	@echo "Checking for RE2"
 	$(CHPL) $(CHPL_FLAGS) $< -o $(DEP_INSTALL_DIR)/$@
@@ -262,12 +259,9 @@ endif
 ARKOUDA_SOURCES = $(shell find $(ARKOUDA_SOURCE_DIR)/ -type f -name '*.chpl')
 ARKOUDA_MAIN_SOURCE := $(ARKOUDA_SOURCE_DIR)/$(ARKOUDA_MAIN_MODULE).chpl
 
-ifeq ($(shell expr $(CHPL_MINOR) \< 27),1)
-	ARKOUDA_COMPAT_MODULES += -M $(ARKOUDA_SOURCE_DIR)/compat/lt-127
-endif
-
 ifeq ($(shell expr $(CHPL_MINOR) \= 27),1)
 	ARKOUDA_COMPAT_MODULES += -M $(ARKOUDA_SOURCE_DIR)/compat/e-127
+	CHPL_FLAGS += --instantiate-max 512
 endif
 
 ifeq ($(shell expr $(CHPL_MINOR) \>= 28),1)

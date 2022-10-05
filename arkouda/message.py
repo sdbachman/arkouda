@@ -199,7 +199,7 @@ class ParameterObject:
         ParameterObject - The parameter object formatted to be parsed by the chapel server
         """
         from arkouda.pdarrayclass import pdarray
-
+        
         dispatch = ParameterObject.generate_dispatch()
         if isinstance(
             val, pdarray

@@ -17,8 +17,9 @@ module Arr2DMsg {
   private config const logLevel = ServerConfig.logLevel;
   const randLogger = new Logger(logLevel);
 
-  proc array2DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
-    var msgArgs = parseMessageArgs(args, argSize);
+  proc array2DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+    var msgArgs = parseMessageArgs(payload, argSize);
+
     var val = msgArgs.getValueOf("val");
     var dtype = DType.UNDEF;
     var m: int;
@@ -69,11 +70,12 @@ module Arr2DMsg {
     return new MsgTuple(msg, msgType);
   }
 
-  proc randint2DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+  proc randint2DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
 
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
-    var msgArgs = parseMessageArgs(args, argSize);
+    var msgArgs = parseMessageArgs(payload, argSize);
+
     var dtype = str2dtype(msgArgs.getValueOf("dtype"));
     var m = msgArgs.get("m").getIntValue();
     var n = msgArgs.get("n").getIntValue();
@@ -125,13 +127,15 @@ module Arr2DMsg {
     return new MsgTuple(repMsg, MsgType.NORMAL);
   }
 
-  proc binopvv2DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+
+  proc binopvv2DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
  
    param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
 
     // split request into fields
-    var msgArgs = parseMessageArgs(args, argSize);
+    var msgArgs = parseMessageArgs(payload, argSize);
+
     const op = msgArgs.getValueOf("op");
     var aname = msgArgs.getValueOf("a");
     var bname = msgArgs.getValueOf("b");
@@ -243,11 +247,13 @@ module Arr2DMsg {
     return (tab.getBorrowed(name):borrowed GenSymEntry): SymEntry2D(t);
   }
 
-  proc rowIndex2DMsg(cmd: string, args: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+
+  proc rowIndex2DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
 
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
-    var msgArgs = parseMessageArgs(args, argSize);
+    var msgArgs = parseMessageArgs(payload, argSize);
+
     var name = msgArgs.getValueOf("name");
     var row: int;
     try {
