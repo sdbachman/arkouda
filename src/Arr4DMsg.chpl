@@ -19,6 +19,7 @@ module Arr4DMsg {
 
   proc array4DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
     var msgArgs = parseMessageArgs(payload, argSize);
+
     var val = msgArgs.getValueOf("val");
     var dtype = DType.UNDEF;
     var m: int;
@@ -77,6 +78,7 @@ module Arr4DMsg {
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
     var msgArgs = parseMessageArgs(payload, argSize);
+
     var dtype = str2dtype(msgArgs.getValueOf("dtype"));
     var m = msgArgs.get("m").getIntValue();
     var n = msgArgs.get("n").getIntValue();
@@ -135,6 +137,7 @@ module Arr4DMsg {
     var repMsg: string; // response message
 
     var msgArgs = parseMessageArgs(payload, argSize);
+
     const op = msgArgs.getValueOf("op");
     var aname = msgArgs.getValueOf("a");
     var bname = msgArgs.getValueOf("b");

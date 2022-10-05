@@ -19,6 +19,7 @@ module Arr2DMsg {
 
   proc array2DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
     var msgArgs = parseMessageArgs(payload, argSize);
+
     var val = msgArgs.getValueOf("val");
     var dtype = DType.UNDEF;
     var m: int;
@@ -74,6 +75,7 @@ module Arr2DMsg {
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
     var msgArgs = parseMessageArgs(payload, argSize);
+
     var dtype = str2dtype(msgArgs.getValueOf("dtype"));
     var m = msgArgs.get("m").getIntValue();
     var n = msgArgs.get("n").getIntValue();
@@ -125,6 +127,7 @@ module Arr2DMsg {
     return new MsgTuple(repMsg, MsgType.NORMAL);
   }
 
+
   proc binopvv2DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
  
    param pn = Reflection.getRoutineName();
@@ -132,6 +135,7 @@ module Arr2DMsg {
 
     // split request into fields
     var msgArgs = parseMessageArgs(payload, argSize);
+
     const op = msgArgs.getValueOf("op");
     var aname = msgArgs.getValueOf("a");
     var bname = msgArgs.getValueOf("b");
@@ -243,11 +247,13 @@ module Arr2DMsg {
     return (tab.getBorrowed(name):borrowed GenSymEntry): SymEntry2D(t);
   }
 
+
   proc rowIndex2DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
 
     param pn = Reflection.getRoutineName();
     var repMsg: string; // response message
     var msgArgs = parseMessageArgs(payload, argSize);
+
     var name = msgArgs.getValueOf("name");
     var row: int;
     try {
