@@ -292,9 +292,48 @@ module Arr2DMsg {
     }
   }
 
+  proc partialReduction2DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+    var msgArgs = parseMessageArgs(payload, argSize);
+    var repMsg: string;
+
+    var name = msgArgs.getValueOf("name");
+    var axis: int;
+    try {
+      axis = msgArgs.get("axis").getIntValue();
+    } catch {
+      var errorMsg = "Error parsing/decoding key";
+      gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+    }
+    var inputEntry: borrowed GenSymEntry = getGenericTypedArrayEntry(name, st);
+    // TODO: why is this type real when I pass 5?
+
+    // TODO: Select on type
+    var inputArr = inputEntry: SymEntry2D(real);
+    var rname = st.nextName();
+
+    // TODO: select on op and type
+    if axis == 0 { // sum column-wise
+      var numCols = inputArr.n;
+      var res = st.addEntry(rname, numCols, real);
+      forall i in 0..#numCols {
+        res.a[i] = + reduce inputArr.a[.., i];
+      }
+    } else {
+      var numRows = inputArr.m;
+      var res = st.addEntry(rname, numRows, real);
+      forall i in 0..#numRows {
+        res.a[i] = + reduce inputArr.a[i, ..];
+      }
+    }
+    
+    repMsg = "created " + st.attrib(rname);
+    return new MsgTuple(repMsg, MsgType.NORMAL);
+  }
+
   use CommandMap;
   registerFunction("array2d", array2DMsg,getModuleName());
   registerFunction("randint2d", randint2DMsg,getModuleName());
   registerFunction("binopvv2d", binopvv2DMsg,getModuleName());
   registerFunction("[int2d]", rowIndex2DMsg,getModuleName());
+  registerFunction("partialReduction2D", partialReduction2DMsg, getModuleName());
 }
