@@ -30,7 +30,7 @@ from arkouda.infoclass import list_registry, information, pretty_print_informati
 
 logger = getArkoudaLogger(name='pdarrayclass')
 
-__all__ = ['array2D', 'randint2D', 'reshape']
+__all__ = ['array2D', 'randint2D', 'reshape', 'sum']
 
 class pdarray2D(pdarray):
     objtype = 'pdarray2D'
@@ -109,6 +109,10 @@ def create_pdarray2D(repMsg : str) -> pdarray2D:
     logger.debug(("created Chapel array with name: {} dtype: {} size: {} ndim: {} shape: {} " +
                   "itemsize: {}").format(name, mydtype, size, ndim, shape, itemsize))
     return pdarray2D(name, dtype(mydtype), size, ndim, shape, itemsize)
+
+def sum(pda: pdarray, axis: int) -> pdarray:
+    rep_msg = generic_msg(cmd='partialReduction2D', args={"name": pda.name, "axis": axis, "op": "sum"})
+    return create_pdarray(rep_msg)
 
 def array2D(val, m, n, dtype: Union[np.dtype, type, str] = float64) -> Union[pdarray, Strings]:
     """
