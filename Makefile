@@ -61,6 +61,9 @@ endif
 ifdef ARKOUDA_ARROW_PATH
 $(eval $(call add-path,$(ARKOUDA_ARROW_PATH)))
 endif
+ifdef ARKOUDA_NETCDF_PATH
+$(eval $(call add-path,$(ARKOUDA_NETCDF_PATH)))
+endif
 
 ifndef ARKOUDA_CONFIG_FILE
 ARKOUDA_CONFIG_FILE := $(ARKOUDA_PROJECT_DIR)/ServerModules.cfg
@@ -69,6 +72,10 @@ endif
 CHPL_FLAGS += -lhdf5 -lhdf5_hl -lzmq
 
 CHPL_FLAGS += -lparquet -larrow
+
+CHPL_FLAGS += -lnetcdf
+CHPL_FLAGS += -I/opt/local/include -L/opt/local/lib --ldflags="-Wl,-rpath,/opt/local/lib"
+
 OPTIONAL_CHECKS += check-arrow
 ARROW_FILE_NAME += $(ARKOUDA_SOURCE_DIR)/ArrowFunctions
 ARROW_CPP += $(ARROW_FILE_NAME).cpp
