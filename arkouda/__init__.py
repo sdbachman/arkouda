@@ -36,3 +36,4 @@ from arkouda.pdarray3dclass import *
 from arkouda.pdarray4dclass import *
 from arkouda.reshape import *
 from arkouda.foo import *
+from arkouda.netcdfIO import *
