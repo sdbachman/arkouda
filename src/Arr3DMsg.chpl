@@ -248,8 +248,53 @@ module Arr3DMsg {
     return (tab.getBorrowed(name):borrowed GenSymEntry): SymEntry3D(t);
   }
 
+  proc rowIndex3DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+
+    param pn = Reflection.getRoutineName();
+    var repMsg: string; // response message
+    var msgArgs = parseMessageArgs(payload, argSize);
+
+    var name = msgArgs.getValueOf("name");
+    var row: int;
+    try {
+       row = msgArgs.get("key").getIntValue();
+    } catch {
+          var errorMsg = "Error parsing/decoding key";
+          gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+    }
+
+    // get next symbol name
+    var rname = st.nextName();
+    var gEnt: borrowed GenSymEntry = getGenericTypedArrayEntry(name, st);
+
+    proc getRowHelper(type t) throws {
+      var e = toSymEntry3D(gEnt, t);
+      var a = st.addEntry(rname, e.m, t);
+      a.a = e.a[row,0,..];
+      var repMsg = "created " + st.attrib(rname);
+      return new MsgTuple(repMsg, MsgType.NORMAL);
+    }
+
+    select(gEnt.dtype) {
+      when (DType.Int64) {
+        return getRowHelper(int);
+      }
+      when (DType.Float64) {
+        return getRowHelper(real);
+      }
+      when (DType.Bool) {
+        return getRowHelper(bool);
+      }
+      otherwise {
+        var errorMsg = notImplementedError(pn,dtype2str(gEnt.dtype));
+        return new MsgTuple(errorMsg,MsgType.ERROR);
+      }
+    }
+  }
+
   use CommandMap;
   registerFunction("array3d", array3DMsg,getModuleName());
   registerFunction("randint3d", randint3DMsg,getModuleName());
   registerFunction("binopvv3d", binopvv3DMsg,getModuleName());
+  registerFunction("[int3d]", rowIndex3DMsg,getModuleName());
 }
