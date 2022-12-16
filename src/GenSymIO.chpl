@@ -237,6 +237,15 @@ module GenSymIO {
                 when ("pdarray") {
                     item +="," + Q + "created" + QCQ + "created " + st.attrib(id) + Q + "}";
                 }
+                when ("pdarray2D") {
+                    item +="," + Q + "created" + QCQ + "created " + st.attrib(id) + Q + "}";
+                }
+                when ("pdarray3D") {
+                    item +="," + Q + "created" + QCQ + "created " + st.attrib(id) + Q + "}";
+                }
+                when ("pdarray4D") {
+                    item +="," + Q + "created" + QCQ + "created " + st.attrib(id) + Q + "}";
+                }
                 when ("seg_string") {
                     var (segName, nBytes) = id.splitMsgToTuple("+", 2);
                     item += "," + Q + "created" + QCQ + "created " + st.attrib(segName) + "+created bytes.size " + nBytes + Q + "}";

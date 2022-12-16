@@ -1,7 +1,8 @@
-module HDF5Msg {
+module NetCDFMsg {
     use CTypes;
     use FileSystem;
     use HDF5;
+    use NetCDF.C_NetCDF;
     use IO;
     use List;
     use Map;
@@ -9,6 +10,10 @@ module HDF5Msg {
     use Reflection;
     use Set;
     use Time only;
+
+    use SymEntry2D;
+    use SymEntry3D;
+    use SymEntry4D;
 
     use CommAggregation;
     use FileIO;
@@ -47,13 +52,14 @@ module HDF5Msg {
      * :returns: string formatted as json list
      * i.e. ["_arkouda_metadata", "pda1", "s1"]
      */
-    proc lshdfMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
-        // reqMsg: "lshdf [<json_filename>]"
+    proc lsNetCDFMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+        // reqMsg: "lsnetcdf [<json_filename>]"
         var repMsg: string;
         var msgArgs = parseMessageArgs(payload, argSize);
 
         // Retrieve filename from payload
         var filename: string = msgArgs.getValueOf("filename");
+        /*
         if filename.isEmpty() {
             var errorMsg = "Filename was Empty";
             h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
@@ -76,31 +82,65 @@ module HDF5Msg {
             // Set filename to globbed filename corresponding to locale 0
             filename = tmp[tmp.domain.first];
         }
-        
+        */
+
         // Check to see if the file exists. If not, return an error message
         if !exists(filename) {
             var errorMsg = "File %s does not exist in a location accessible to Arkouda".format(filename);
-            h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            //h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
             return new MsgTuple(errorMsg,MsgType.ERROR);
         } 
 
+        /*
         if !isHdf5File(filename) {
             var errorMsg = "File %s is not an HDF5 file".format(filename);
             h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
             return new MsgTuple(errorMsg,MsgType.ERROR);
         }
-        
-        try {
+        */        
 
+        try {
+            var filename_c = filename.c_str();
+            var ncid : c_int;
+
+            // Open NetCDF file
+            nc_open(filename_c, NC_NOWRITE, ncid);
+
+            // Determine number of variables
+            extern proc nc_inq_varids(ncid: c_int, nvars, varids);
+            var nvars : c_int;
+            nc_inq_varids(ncid, c_ptrTo(nvars), c_nil);
+
+            // Determine variable ID numbers
+            var varids : [0..#nvars] c_int;
+            nc_inq_varids(ncid, c_ptrTo(nvars), c_ptrTo(varids));
+
+            // Get variable names, load into array of strings
+            extern proc nc_inq_varname(ncid : c_int, varid : c_int, name);
+            var names : [0..#nvars] string;
+            for (id, i) in zip(varids, 0..#nvars) {
+              var name : [0..20] c_char;
+              nc_inq_varname(ncid, id, c_ptrTo(name));
+              names[i] = (c_ptrTo(name):c_string):string;
+            }            
+
+            writeln("Variable names: ", names);
+            nc_close(ncid); // ensure file is closed
+            var items = new list(names);
+            repMsg = "%jt".format(items);
+            
+            /*
             var file_id = C_HDF5.H5Fopen(filename.c_str(), C_HDF5.H5F_ACC_RDONLY, C_HDF5.H5P_DEFAULT);
             defer { C_HDF5.H5Fclose(file_id); } // ensure file is closed
             repMsg = simulate_h5ls(file_id);
             var items = new list(repMsg.split(",")); // convert to json
 
             repMsg = "%jt".format(items);
+            */
         } catch e : Error {
-            var errorMsg = "Failed to process HDF5 file %t".format(e.message());
-            h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            var errorMsg = "Failed to process NetCDF file %t".format(e.message());
+            //h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+             
             return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
@@ -112,7 +152,7 @@ module HDF5Msg {
     private extern proc c_incrementCounter(data:c_void_ptr);
     private extern proc c_append_HDF5_fieldname(data:c_void_ptr, name:c_string);
 
-    /**
+    /*new list *
      * Simulate h5ls call by using HDF5 API (top level datasets and groups only, not recursive)
      * This uses both internal call back functions as well as exter c functions defined above to
      * work with the HDF5 API and handle the the data objects it passes between calls as opaque void*
@@ -1774,282 +1814,177 @@ module HDF5Msg {
     /**
      * Reads all datasets from 1..n HDF5 files into an Arkouda symbol table. 
      */
-    proc readAllHdfMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+
+
+proc CreateArray(param numDims, indicesArr) {
+
+  if numDims == 1 {
+    var var_in: [0..#indicesArr[0]] real(32);
+    return var_in;
+  } else if numDims == 2 {
+    var var_in: [0..#indicesArr[0], 0..#indicesArr[1]] real(32);
+    return var_in;
+  } else if numDims == 3 {
+    var var_in: [0..#indicesArr[0], 0..#indicesArr[1], 0..#indicesArr[2]] real(32);
+    return var_in;
+  } else if numDims == 4 {
+    var var_in: [0..#indicesArr[0], 0..#indicesArr[1], 0..#indicesArr[2], 0..#indicesArr[3]] real(32);
+    return var_in;
+  }
+}
+
+proc DistributedRead(const filename, varid, var_in, ndims) {
+
+      
+      const D = var_in.domain dmapped Block(var_in.domain);
+      var dist_array : [D] real;
+
+
+      coforall loc in Locales do on loc {
+        //writeln("Local subdomain on Locale ", here.id, ": \n", D.localSubdomain());
+
+        /* Some external procedure declarations */
+          extern proc nc_get_vara_double(ncid: c_int, u_varid: c_int, start, count, u_int): c_int;
+
+        /* Determine where to start reading file, and how many elements to read */
+          // Start specifies a hyperslab.  It expects an array of dimension sizes
+          var start = tuplify(D.localSubdomain().first);
+          // Count specifies a hyperslab.  It expects an array of dimension sizes
+          var count = tuplify(D.localSubdomain().shape);
+
+        /* Create arrays of c_size_t for compatibility with NetCDF-C functions. */
+          var start_c = [i in 0..#start.size] start[i] : c_size_t;
+          var count_c = [i in 0..#count.size] count[i] : c_size_t;
+
+          var ncid : c_int;
+          cdfError(nc_open(filename.c_str(), NC_NOWRITE, ncid));
+
+          //writeln("URL on Locale ", here.id, ": ", filename);
+
+          nc_get_vara_double(ncid, varid, c_ptrTo(start_c[0]), c_ptrTo(count_c[0]), c_ptrTo(dist_array[start]));
+
+          //writeln("On locale ", here.id, " with start: ", start, ", and count:", count, ",\n", dist_array[dist_array.localSubdomain()]);
+
+          nc_close(ncid);
+      }
+      return dist_array;
+}
+
+
+proc cdfError(e) {
+  if e != NC_NOERR {
+    writeln("Error: ", nc_strerror(e): string);
+    exit(2);
+  }
+}
+
+inline proc tuplify(x) {
+  if isTuple(x) then return x; else return (x,);
+}
+
+    proc readNetCDFMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string;
         var msgArgs = parseMessageArgs(payload, argSize);
-        var strictTypes: bool = msgArgs.get("strict_types").getBoolValue();
+        //var strictTypes: bool = msgArgs.get("strict_types").getBoolValue();
 
-        var allowErrors: bool = msgArgs.get("allow_errors").getBoolValue(); // default is false
-        if allowErrors {
-            h5Logger.warn(getModuleName(), getRoutineName(), getLineNumber(), "Allowing file read errors");
+        writeln(msgArgs);
+
+        var filename: string = msgArgs.getValueOf("filename");
+        var dset: string = msgArgs.getValueOf("dset");
+
+        var filename_c = filename.c_str();
+        var dset_c = dset.c_str();
+
+        var ncid : c_int;
+        var varid : c_int;
+        var ndims : c_int;
+        var dimid: c_int;
+
+        // Open the file
+        nc_open(filename_c, NC_NOWRITE, ncid);
+
+        // Get the variable ID
+        nc_inq_varid(ncid, dset_c, varid);
+
+        // Get the number of dimensions for this variable
+        nc_inq_varndims(ncid, varid, ndims);
+        writeln("ndims: ", ndims);
+
+        var dimids : [0..#ndims] c_int;
+        var dimlens : [0..#ndims] c_size_t;
+
+        // Get the IDs of each dimension
+        extern proc nc_inq_vardimid(ncid: c_int, varid: c_int, dimids);
+        nc_inq_vardimid(ncid, varid, c_ptrTo(dimids));
+
+        writeln("dimids: ", dimids);
+
+        // Get the size of each dimension
+        //
+        extern proc nc_inq_dimlen(ncid: c_int, dimid: c_int, lenp);
+        for i in 0..#ndims do {
+           nc_inq_dimlen(ncid, dimids[i], c_ptrTo(dimlens[i]));
         }
-
-        var calcStringOffsets: bool = msgArgs.get("calc_string_offsets").getBoolValue(); // default is false
-        if calcStringOffsets {
-            h5Logger.warn(getModuleName(), getRoutineName(), getLineNumber(),
-                "Calculating string array offsets instead of reading from HDF5");
-        }
-
-        var ndsets = msgArgs.get("dset_size").getIntValue(); 
-        var nfiles = msgArgs.get("filename_size").getIntValue();
-        var dsetlist: [0..#ndsets] string;
-        var filelist: [0..#nfiles] string;
-
-        try {
-            dsetlist = msgArgs.get("dsets").getList(ndsets);
-        } catch {
-            // limit length of dataset names to 2000 chars
-            var n: int = 1000;
-            var jsondsets = msgArgs.getValueOf("dsets");
-            var dsets: string = if jsondsets.size > 2*n then jsondsets[0..#n]+'...'+jsondsets[jsondsets.size-n..#n] else jsondsets;
-            var errorMsg = "Could not decode json dataset names via tempfile (%i files: %s)".format(
-                                                ndsets, dsets);
-            h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-            return new MsgTuple(errorMsg, MsgType.ERROR);
-        }
-
-        try {
-            filelist = msgArgs.get("filenames").getList(nfiles);
-        } catch {
-            // limit length of file names to 2000 chars
-            var n: int = 1000;
-            var jsonfiles = msgArgs.getValueOf("filenames");
-            var files: string = if jsonfiles.size > 2*n then jsonfiles[0..#n]+'...'+jsonfiles[jsonfiles.size-n..#n] else jsonfiles;
-            var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(nfiles, files);
-            h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-            return new MsgTuple(errorMsg, MsgType.ERROR);
-        }
-
-        var filedom = filelist.domain;
-        var filenames: [filedom] string;
-
-        if filelist.size == 1 {
-            if filelist[0].strip().size == 0 {
-                var errorMsg = "filelist was empty.";
-                h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return new MsgTuple(errorMsg, MsgType.ERROR);
-            }
-            var tmp = glob(filelist[0]);
-            h5Logger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                  "glob expanded %s to %i files".format(filelist[0], tmp.size));
-            if tmp.size == 0 {
-                var errorMsg = "The wildcarded filename %s either corresponds to files inaccessible to Arkouda or files of an invalid format".format(filelist[0]);
-                h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return new MsgTuple(errorMsg, MsgType.ERROR);
-            }
-            // Glob returns filenames in weird order. Sort for consistency
-            sort(tmp);
-            filedom = tmp.domain;
-            filenames = tmp;
-        } else {
-            filenames = filelist;
-        }
-        var segStringFlags: [filedom] bool;
-        var dclasses: [filedom] C_HDF5.hid_t;
-        var bytesizes: [filedom] int;
-        var signFlags: [filedom] bool;
+        writeln("dimlens: ", dimlens);
+        nc_close(ncid); // ensure file is closed
+        
         var rnames: list((string, string, string)); // tuple (dsetName, item type, id)
-        var fileErrors: list(string);
+        var rname = st.nextName();
+
+        if dimlens.size == 1 {
+          var var_in = CreateArray(1, dimlens);  // these needs to be a param value in here (so can't use runtime-known value
+          var var_dist = DistributedRead(filename, varid, var_in, ndims);
+          var m = var_in.shape[0];
+          var entryReal = new shared SymEntry(m, real);
+          entryReal.a = var_dist;
+          st.addEntry(rname, entryReal);
+          rnames.append((dset, "pdarray", rname)); }
+        else if dimlens.size == 2 then {
+          var var_in = CreateArray(2, dimlens);
+          var var_dist = DistributedRead(filename, varid, var_in, ndims);
+          var m = var_in.shape[0];
+          var n = var_in.shape[1];
+          var entryReal = new shared SymEntry2D(m, n, real);
+          entryReal.a = var_dist;
+          st.addEntry(rname, entryReal);
+          rnames.append((dset, "pdarray2D", rname)); }
+        else if dimlens.size == 3 then {
+          var var_in = CreateArray(3, dimlens);
+          var var_dist = DistributedRead(filename, varid, var_in, ndims);
+          var m = var_in.shape[0];
+          var n = var_in.shape[1];
+          var p = var_in.shape[2];
+          var entryReal = new shared SymEntry3D(m, n, p, real);
+          entryReal.a = var_dist;
+          st.addEntry(rname, entryReal);
+          rnames.append((dset, "pdarray3D", rname)); }
+        else if dimlens.size == 4 then {
+          var var_in = CreateArray(4, dimlens);
+          var var_dist = DistributedRead(filename, varid, var_in, ndims);
+          var m = var_in.shape[0];
+          var n = var_in.shape[1];
+          var p = var_in.shape[2];
+          var q = var_in.shape[3];
+          var entryReal = new shared SymEntry4D(m, n, p, q, real);
+          entryReal.a = var_dist;
+          st.addEntry(rname, entryReal);
+          rnames.append((dset, "pdarray4D", rname)); }
+       
+        var allowErrors = false;
+
         var fileErrorCount:int = 0;
+        var fileErrors: list(string);
         var fileErrorMsg:string = "";
-        const AK_META_GROUP = ARKOUDA_HDF5_FILE_METADATA_GROUP(1..ARKOUDA_HDF5_FILE_METADATA_GROUP.size-1); // strip leading slash
-        for dsetName in dsetlist do {
-            if dsetName == AK_META_GROUP { // Always skip internal metadata group if present
-                continue;
-            }
-            for (i, fname) in zip(filedom, filenames) {
-                var hadError = false;
-                try {
-                    (segStringFlags[i], dclasses[i], bytesizes[i], signFlags[i]) = get_dtype(fname, dsetName, calcStringOffsets);
-                } catch e: FileNotFoundError {
-                    fileErrorMsg = "File %s not found".format(fname);
-                    h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
-                    hadError = true;
-                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
-                } catch e: PermissionError {
-                    fileErrorMsg = "Permission error %s opening %s".format(e.message(),fname);
-                    h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
-                    hadError = true;
-                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
-                } catch e: DatasetNotFoundError {
-                    fileErrorMsg = "Dataset %s not found in file %s".format(dsetName,fname);
-                    h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
-                    hadError = true;
-                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
-                } catch e: NotHDF5FileError {
-                    fileErrorMsg = "The file %s is not an HDF5 file: %s".format(fname,e.message());
-                    h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
-                    hadError = true;
-                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
-                } catch e: SegStringError {
-                    fileErrorMsg = "SegmentedString error: %s".format(e.message());
-                    h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
-                    hadError = true;
-                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
-                } catch e : Error {
-                    fileErrorMsg = "Other error in accessing file %s: %s".format(fname,e.message());
-                    h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
-                    hadError = true;
-                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
-                }
-
-                if hadError {
-                    // Keep running total, but we'll only report back the first 10
-                    if fileErrorCount < 10 {
-                        fileErrors.append(fileErrorMsg.replace("\n", " ").replace("\r", " ").replace("\t", " ").strip());
-                    }
-                    fileErrorCount += 1;
-                }
-            }
-            const isSegString = segStringFlags[filedom.first];
-            const dataclass = dclasses[filedom.first];
-            const bytesize = bytesizes[filedom.first];
-            const isSigned = signFlags[filedom.first];
-            for (name, sa, dc, bs, sf) in zip(filenames, segStringFlags, dclasses, bytesizes, signFlags) {
-              if ((sa != isSegString) || (dc != dataclass)) {
-                  var errorMsg = "Inconsistent dtype in dataset %s of file %s".format(dsetName, name);
-                  h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                  return new MsgTuple(errorMsg, MsgType.ERROR);
-              } else if (strictTypes && ((bs != bytesize) || (sf != isSigned))) {
-                  var errorMsg = "Inconsistent precision or sign in dataset %s of file %s\nWith strictTypes, mixing of precision and signedness not allowed (set strictTypes=False to suppress)".format(dsetName, name);
-                  h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                  return new MsgTuple(errorMsg, MsgType.ERROR);
-              }
-            }
-
-            h5Logger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                           "Verified all dtypes across files for dataset %s".format(dsetName));
-            var subdoms: [filedom] domain(1);
-            var segSubdoms: [filedom] domain(1);
-            var skips = new set(string);
-            var len: int;
-            var nSeg: int;
-            try {
-                if isSegString {
-                    if (!calcStringOffsets) {
-                        (segSubdoms, nSeg, skips) = get_subdoms(filenames, dsetName + "/" + SEGSTRING_OFFSET_NAME);
-                    }
-                    (subdoms, len, skips) = get_subdoms(filenames, dsetName + "/" + SEGSTRING_VALUE_NAME);
-                } else {
-                    (subdoms, len, skips) = get_subdoms(filenames, dsetName);
-                }
-            } catch e: HDF5RankError {
-                var errorMsg = notImplementedError("readhdf", "Rank %i arrays".format(e.rank));
-                h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return new MsgTuple(errorMsg, MsgType.ERROR);
-            } catch e: Error {
-                var errorMsg = "Other error in accessing dataset %s: %s".format(dsetName,e.message());
-                h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return new MsgTuple(errorMsg, MsgType.ERROR);
-            }
-
-            h5Logger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                           "Got subdomains and total length for dataset %s".format(dsetName));
-
-            select (isSegString, dataclass) {
-                when (true, C_HDF5.H5T_INTEGER) {
-                    if (bytesize != 1) || isSigned {
-                        var errorMsg = "Error: detected unhandled datatype: segmented? %t, class %i, size %i, signed? %t".format(
-                                                isSegString, dataclass, bytesize, isSigned);
-                        h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                        return new MsgTuple(errorMsg, MsgType.ERROR);
-                    }
-
-                    // Load the strings bytes/values first
-                    var entryVal = new shared SymEntry(len, uint(8));
-                    read_files_into_distributed_array(entryVal.a, subdoms, filenames, dsetName + "/" + SEGSTRING_VALUE_NAME, skips);
-
-                    proc _buildEntryCalcOffsets(): shared SymEntry throws {
-                        var offsetsArray = segmentedCalcOffsets(entryVal.a, entryVal.aD);
-                        return new shared SymEntry(offsetsArray);
-                    }
-
-                    proc _buildEntryLoadOffsets() throws {
-                        var offsetsEntry = new shared SymEntry(nSeg, int);
-                        read_files_into_distributed_array(offsetsEntry.a, segSubdoms, filenames, dsetName + "/" + SEGSTRING_OFFSET_NAME, skips);
-                        fixupSegBoundaries(offsetsEntry.a, segSubdoms, subdoms);
-                        return offsetsEntry;
-                    }
-
-                    var entrySeg = if (calcStringOffsets || nSeg < 1 || !skips.isEmpty()) then _buildEntryCalcOffsets() else _buildEntryLoadOffsets();
-
-                    var stringsEntry = assembleSegStringFromParts(entrySeg, entryVal, st);
-                    // TODO fix the transformation to json after rebasing.
-                    // rnames = rnames + "created %s+created bytes.size %t".format(st.attrib(stringsEntry.name), stringsEntry.nBytes)+ " , ";
-                    rnames.append((dsetName, "seg_string", "%s+%t".format(stringsEntry.name, stringsEntry.nBytes)));
-                }
-                when (false, C_HDF5.H5T_INTEGER) {
-                    /**
-                     * Unfortunately we need to duplicate logic here because of the type param for SymEntry
-                     * In the future we need to figure out a better way to do this.
-                     * Also, in non-strict mode, we allow mixed precision and signed/unsigned, which worked because
-                     * we had not supported uint64 before. With the addition of uint64 we need to identify it
-                     * and try to handle it separately so we don't up-convert 32 & 16 bit accidentally.
-                     */
-                    if (!isSigned && 8 == bytesize) { // uint64
-                        var entryUInt = new shared SymEntry(len, uint);
-                        h5Logger.debug(getModuleName(),getRoutineName(),getLineNumber(), "Initialized uint entry for dataset %s".format(dsetName));
-                        read_files_into_distributed_array(entryUInt.a, subdoms, filenames, dsetName, skips);
-                        var rname = st.nextName();
-                        /*
-                         * See comment about boolean pdarrays in `else` block
-                         */
-                        if isBooleanDataset(filenames[0],dsetName) {
-                            var entryBool = new shared SymEntry(len, bool);
-                            entryBool.a = entryUInt.a:bool;
-                            st.addEntry(rname, entryBool);
-                        } else {
-                            // Not a boolean dataset, so add original SymEntry to SymTable
-                            st.addEntry(rname, entryUInt);
-                        }
-                        rnames.append((dsetName, "pdarray", rname));
-                    } else {
-                        var entryInt = new shared SymEntry(len, int);
-                        h5Logger.debug(getModuleName(),getRoutineName(),getLineNumber(), "Initialized int entry for dataset %s".format(dsetName));
-                        read_files_into_distributed_array(entryInt.a, subdoms, filenames, dsetName, skips);
-                        var rname = st.nextName();
-                        /*
-                         * Since boolean pdarrays are saved to and read from HDF5 as ints, confirm whether this
-                         * is actually a boolean dataset. If so, (1) convert the SymEntry pdarray to a boolean 
-                         * pdarray, (2) create a new SymEntry of type bool, (3) set the SymEntry pdarray 
-                         * reference to the bool pdarray, and (4) add the entry to the SymTable
-                         */
-                        if isBooleanDataset(filenames[0],dsetName) {
-                            var entryBool = new shared SymEntry(len, bool);
-                            entryBool.a = entryInt.a:bool;
-                            st.addEntry(rname, entryBool);
-                        } else {
-                            // Not a boolean dataset, so add original SymEntry to SymTable
-                            st.addEntry(rname, entryInt);
-                        }
-                        rnames.append((dsetName, "pdarray", rname));
-                    }
-                }
-                when (false, C_HDF5.H5T_FLOAT) {
-                    var entryReal = new shared SymEntry(len, real);
-                    h5Logger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                                                      "Initialized float entry");
-                    read_files_into_distributed_array(entryReal.a, subdoms, filenames, dsetName, skips);
-                    var rname = st.nextName();
-                    st.addEntry(rname, entryReal);
-                    rnames.append((dsetName, "pdarray", rname));
-                }
-                otherwise {
-                    var errorMsg = "detected unhandled datatype: segmented? %t, class %i, size %i, " +
-                                   "signed? %t".format(isSegString, dataclass, bytesize, isSigned);
-                    h5Logger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                    return new MsgTuple(errorMsg, MsgType.ERROR);
-                }
-            }
-        }
-    
-        if allowErrors && fileErrorCount > 0 {
-            h5Logger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                "allowErrors:true, fileErrorCount:%t".format(fileErrorCount));
-        }
+  
         repMsg = _buildReadAllMsgJson(rnames, allowErrors, fileErrorCount, fileErrors, st);
-        h5Logger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-        return new MsgTuple(repMsg,MsgType.NORMAL);
+        //writeln("rnames: ", rnames);
+        //writeln("allowErrors: ", allowErrors);
+        //writeln("fileErrorCount: ", fileErrorCount);
+        //writeln("fileErrors: ", fileErrors);
+        //writeln("st: ", st);
+        //writeln("repMsg: ", repMsg);
+        return new MsgTuple(repMsg, MsgType.NORMAL);
+
     }
 
     proc tohdfMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
@@ -2130,7 +2065,7 @@ module HDF5Msg {
     }
 
     use CommandMap;
-    registerFunction("lshdf", lshdfMsg, getModuleName());
-    registerFunction("readAllHdf", readAllHdfMsg, getModuleName());
-    registerFunction("tohdf", tohdfMsg, getModuleName());
+    registerFunction("lsnetcdf", lsNetCDFMsg, getModuleName());
+    registerFunction("readNetCDF", readNetCDFMsg, getModuleName());
+    //registerFunction("tohdf", tohdfMsg, getModuleName());
 }

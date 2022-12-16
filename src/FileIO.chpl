@@ -342,6 +342,42 @@ module FileIO {
       }
     }
 
+    proc lsAny_NetCDFMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+      var msgArgs = parseMessageArgs(payload, argSize);
+
+      // Retrieve filename from payload
+      var filename: string = msgArgs.getValueOf("filename");
+      if filename.isEmpty() {
+        var errorMsg = "Empty Filename Provided.";
+        fioLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+        return new MsgTuple(errorMsg, MsgType.ERROR);
+      }
+
+      // If the filename represents a glob pattern, retrieve the locale 0 filename
+      if isGlobPattern(filename) {
+        // Attempt to interpret filename as a glob expression and ls the first result
+        var tmp = glob(filename);
+
+        if tmp.size <= 0 {
+          var errorMsg = "Cannot retrieve filename from glob expression %s, check file name or format".format(filename);
+          return new MsgTuple(errorMsg, MsgType.ERROR);
+        }
+
+        // Set filename to globbed filename corresponding to locale 0
+        filename = tmp[tmp.domain.first];
+      }
+      fioLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                      "FILENAME: %s".format(filename));
+      if !exists(filename) {
+        var errorMsg = "File %s does not exist in a location accessible to Arkouda".format(filename);
+        return new MsgTuple(errorMsg,MsgType.ERROR);
+      }
+
+      return executeCommand("lsnetcdf", payload, argSize, st);
+
+    }
+
+
     proc readAnyMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
       var msgArgs = parseMessageArgs(payload, argSize);
       var nfiles = msgArgs.get("filename_size").getIntValue();

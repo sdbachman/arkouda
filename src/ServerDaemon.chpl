@@ -356,6 +356,7 @@ module ServerDaemon {
             registerFunction("getCmdMap", getCommandMapMsg);
             registerFunction("clear", clearMsg);
             registerFunction("lsany", lsAnyMsg);
+            registerFunction("lsany_NetCDF", lsAny_NetCDFMsg);
             registerFunction("readany", readAnyMsg);
             registerFunction("getfiletype", getFileTypeMsg);
 

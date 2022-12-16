@@ -15,15 +15,20 @@ from arkouda.client import generic_msg
 from arkouda.pdarrayclass import create_pdarray, pdarray
 from arkouda.strings import Strings
 
+from arkouda.pdarray2dclass import create_pdarray2D
+from arkouda.pdarray3dclass import create_pdarray3D
+from arkouda.pdarray4dclass import create_pdarray4D
+
+
 __all__ = [
-    "ls_NetCDF",
+    "lsnetcdf",
     "read_NetCDF",
     "get_datasets_NetCDF",
 ]
 
 
 @typechecked
-def ls_NetCDF(filename: str) -> List[str]:
+def lsnetcdf(filename: str) -> List[str]:
     """
     This function calls the h5ls utility on a HDF5 file visible to the
     arkouda server or calls a function that imitates the result of h5ls
@@ -51,7 +56,7 @@ def ls_NetCDF(filename: str) -> List[str]:
     if not (filename and filename.strip()):
         raise ValueError("filename cannot be an empty string")
 
-    cmd = "lsany_netcdf"
+    cmd = "lsany_NetCDF"
     return json.loads(
         cast(
             str,
@@ -64,7 +69,7 @@ def ls_NetCDF(filename: str) -> List[str]:
         )
     )
 
-def read_NetCDF(filename: str, dataset: str, dim: int) -> Union[pdarray, Strings, Mapping[str, Union[pdarray, Strings]]]:
+def read_NetCDF(filename: str, dataset: str) -> Union[pdarray, Strings, Mapping[str, Union[pdarray, Strings]]]:
     """
     Read datasets from HDF5 or Parquet files.
 
@@ -72,7 +77,6 @@ def read_NetCDF(filename: str, dataset: str, dim: int) -> Union[pdarray, Strings
     ----------
     filename : The file to be opened
     dataset : The dataset to be opened from the file
-    dim : The dimension of the dataset (need to know this to allocate destination array)
 
     Returns
     -------
@@ -109,19 +113,20 @@ def read_NetCDF(filename: str, dataset: str, dim: int) -> Union[pdarray, Strings
     if dataset is None:
         raise ValueError("No variable requested.")
     else:  # ensure dataset exists
-        nonexistent = set(dataset) - set(get_datasets(filename))
-        if len(nonexistent) > 0:
-            raise ValueError(f"Variable not found: {nonexistent}")
+        #nonexistent = set(dataset) - set(get_datasets_NetCDF(filename))
+        exists = dataset in get_datasets_NetCDF(filename)
+        #if len(nonexistent) > 0:
+        if not exists:
+            raise ValueError(f"Variable not found: {dataset}")
 
     cmd = "readNetCDF"
-        rep_msg = generic_msg(
+    rep_msg = generic_msg(
             cmd=cmd,
             args={
                 "dset": dataset,
-                "dim" : dim,
                 "filename": filename,
             },
-        )
+    )
 
     rep = json.loads(rep_msg)  # See GenSymIO._buildReadAllHdfMsgJson for json structure
     items = rep["items"] if "items" in rep else []
@@ -130,8 +135,15 @@ def read_NetCDF(filename: str, dataset: str, dim: int) -> Union[pdarray, Strings
     ## Return conditions: either it m
     if len(items) == 1:
         item = items[0]
+
         if "pdarray" == item["arkouda_type"]:
             return create_pdarray(item["created"])
+        if "pdarray2D" == item["arkouda_type"]:
+            return create_pdarray2D(item["created"])
+        if "pdarray3D" == item["arkouda_type"]:
+            return create_pdarray3D(item["created"])
+        if "pdarray4D" == item["arkouda_type"]:
+            return create_pdarray4D(item["created"])
     else:
         raise RuntimeError("No items were returned")
 
@@ -165,7 +177,7 @@ def get_datasets_NetCDF(filename: str) -> List[str]:
     --------
     ls
     """
-    datasets = ls_NetCDF(filename)
+    datasets = lsnetcdf(filename)
     return datasets
 
 
