@@ -1833,7 +1833,27 @@ proc CreateArray(param numDims, indicesArr) {
   }
 }
 
-proc DistributedRead(const filename, varid, var_in, ndims) {
+proc CreateArrayFlat(param numDims, indicesArr) {
+  if numDims == 1 {
+    var u_in: [0..#indicesArr[0]] real(32);
+    var u_flat = u_in;
+    return (u_in, u_flat);
+  } else if numDims == 2 {
+    var u_in: [0..#indicesArr[0], 0..#indicesArr[1]] real(32);
+    var u_flat: [0..#(indicesArr[0] * indicesArr[1])] real(32);
+    return (u_in, u_flat);
+  } else if numDims == 3 {
+    var u_in: [0..#indicesArr[0], 0..#indicesArr[1], 0..#indicesArr[2]] real(32);
+    var u_flat: [0..#(indicesArr[0] * indicesArr[1] * indicesArr[2])] real(32);
+    return (u_in, u_flat);
+  } else if numDims == 4 {
+    var u_in: [0..#indicesArr[0], 0..#indicesArr[1], 0..#indicesArr[2], 0..#indicesArr[3]] real(32);
+    var u_flat: [0..#(indicesArr[0] * indicesArr[1] * indicesArr[2] * indicesArr[3])] real(32);
+    return (u_in, u_flat);
+  }
+}
+
+proc DistributedRead(const filename, varid, var_in) {
 
       
       const D = var_in.domain dmapped Block(var_in.domain);
@@ -1870,6 +1890,47 @@ proc DistributedRead(const filename, varid, var_in, ndims) {
       return dist_array;
 }
 
+proc DistributedReadFlat(const filename, varid, var_in, var_flat) {
+
+   
+      const D = var_in.domain dmapped Block(var_in.domain);
+      const D_flat = var_flat.domain dmapped Block(var_flat.domain);
+
+      var dist_array : [D_flat] real;
+
+
+      coforall loc in Locales do on loc {
+        //writeln("Local subdomain on Locale ", here.id, ": \n", D.localSubdomain());
+
+        /* Some external procedure declarations */
+          extern proc nc_get_vara_double(ncid: c_int, u_varid: c_int, start, count, u_int): c_int;
+
+        /* Determine where to start reading file, and how many elements to read */
+          // Start specifies a hyperslab.  It expects an array of dimension sizes
+          var start = tuplify(D.localSubdomain().first);
+          var start_flat = tuplify(D_flat.localSubdomain().first);
+
+          // Count specifies a hyperslab.  It expects an array of dimension sizes
+          var count = tuplify(D.localSubdomain().shape);
+
+        /* Create arrays of c_size_t for compatibility with NetCDF-C functions. */
+          var start_c = [i in 0..#start.size] start[i] : c_size_t;
+          var count_c = [i in 0..#count.size] count[i] : c_size_t;
+
+          var ncid : c_int;
+          cdfError(nc_open(filename.c_str(), NC_NOWRITE, ncid));
+
+          //writeln("URL on Locale ", here.id, ": ", filename);
+
+          nc_get_vara_double(ncid, varid, c_ptrTo(start_c[0]), c_ptrTo(count_c[0]), c_ptrTo(dist_array[start_flat]));
+
+          //writeln("On locale ", here.id, " with start: ", start, ", and count:", count, ",\n", dist_array[dist_array.localSubdomain()]);
+
+          nc_close(ncid);
+      }
+      return dist_array;
+}
+
 
 proc cdfError(e) {
   if e != NC_NOERR {
@@ -1891,6 +1952,7 @@ inline proc tuplify(x) {
 
         var filename: string = msgArgs.getValueOf("filename");
         var dset: string = msgArgs.getValueOf("dset");
+        var read_shape: string = msgArgs.getValueOf("read_shape");
 
         var filename_c = filename.c_str();
         var dset_c = dset.c_str();
@@ -1931,9 +1993,44 @@ inline proc tuplify(x) {
         var rnames: list((string, string, string)); // tuple (dsetName, item type, id)
         var rname = st.nextName();
 
+        if (read_shape == "flat") {
+          if dimlens.size == 1 {
+          var (var_in, var_flat) = CreateArrayFlat(1, dimlens);  // these needs to be a param value in here (so can't use runtime-known value
+          var var_dist = DistributedReadFlat(filename, varid, var_in, var_flat);
+          var m = var_flat.shape[0];
+          var entryReal = new shared SymEntry(m, real);
+          entryReal.a = var_dist;
+          st.addEntry(rname, entryReal);
+          rnames.append((dset, "pdarray", rname)); }
+        else if dimlens.size == 2 then {
+          var (var_in, var_flat) = CreateArrayFlat(2, dimlens);
+          var var_dist = DistributedReadFlat(filename, varid, var_in, var_flat);
+          var m = var_flat.shape[0];
+          var entryReal = new shared SymEntry(m, real);
+          entryReal.a = var_dist;
+          st.addEntry(rname, entryReal);
+          rnames.append((dset, "pdarray", rname)); }
+        else if dimlens.size == 3 then {
+          var (var_in, var_flat) = CreateArrayFlat(3, dimlens);
+          var var_dist = DistributedReadFlat(filename, varid, var_in, var_flat);
+          var m = var_flat.shape[0];
+          var entryReal = new shared SymEntry(m, real);
+          entryReal.a = var_dist;
+          st.addEntry(rname, entryReal);
+          rnames.append((dset, "pdarray", rname)); }
+        else if dimlens.size == 4 then {
+          var (var_in, var_flat) = CreateArrayFlat(4, dimlens);
+          var var_dist = DistributedReadFlat(filename, varid, var_in, var_flat);
+          var m = var_flat.shape[0];
+          var entryReal = new shared SymEntry(m, real);
+          entryReal.a = var_dist;
+          st.addEntry(rname, entryReal);
+          rnames.append((dset, "pdarray", rname)); }
+        }
+        else if (read_shape == "normal") {
         if dimlens.size == 1 {
           var var_in = CreateArray(1, dimlens);  // these needs to be a param value in here (so can't use runtime-known value
-          var var_dist = DistributedRead(filename, varid, var_in, ndims);
+          var var_dist = DistributedRead(filename, varid, var_in);
           var m = var_in.shape[0];
           var entryReal = new shared SymEntry(m, real);
           entryReal.a = var_dist;
@@ -1941,7 +2038,7 @@ inline proc tuplify(x) {
           rnames.append((dset, "pdarray", rname)); }
         else if dimlens.size == 2 then {
           var var_in = CreateArray(2, dimlens);
-          var var_dist = DistributedRead(filename, varid, var_in, ndims);
+          var var_dist = DistributedRead(filename, varid, var_in);
           var m = var_in.shape[0];
           var n = var_in.shape[1];
           var entryReal = new shared SymEntry2D(m, n, real);
@@ -1950,7 +2047,7 @@ inline proc tuplify(x) {
           rnames.append((dset, "pdarray2D", rname)); }
         else if dimlens.size == 3 then {
           var var_in = CreateArray(3, dimlens);
-          var var_dist = DistributedRead(filename, varid, var_in, ndims);
+          var var_dist = DistributedRead(filename, varid, var_in);
           var m = var_in.shape[0];
           var n = var_in.shape[1];
           var p = var_in.shape[2];
@@ -1960,7 +2057,7 @@ inline proc tuplify(x) {
           rnames.append((dset, "pdarray3D", rname)); }
         else if dimlens.size == 4 then {
           var var_in = CreateArray(4, dimlens);
-          var var_dist = DistributedRead(filename, varid, var_in, ndims);
+          var var_dist = DistributedRead(filename, varid, var_in);
           var m = var_in.shape[0];
           var n = var_in.shape[1];
           var p = var_in.shape[2];
@@ -1969,7 +2066,8 @@ inline proc tuplify(x) {
           entryReal.a = var_dist;
           st.addEntry(rname, entryReal);
           rnames.append((dset, "pdarray4D", rname)); }
-       
+        }
+
         var allowErrors = false;
 
         var fileErrorCount:int = 0;

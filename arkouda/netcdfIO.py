@@ -69,7 +69,7 @@ def lsnetcdf(filename: str) -> List[str]:
         )
     )
 
-def read_NetCDF(filename: str, dataset: str) -> Union[pdarray, Strings, Mapping[str, Union[pdarray, Strings]]]:
+def read_NetCDF(filename: str, dataset: str, read_shape="normal") -> Union[pdarray, Strings, Mapping[str, Union[pdarray, Strings]]]:
     """
     Read datasets from HDF5 or Parquet files.
 
@@ -77,7 +77,8 @@ def read_NetCDF(filename: str, dataset: str) -> Union[pdarray, Strings, Mapping[
     ----------
     filename : The file to be opened
     dataset : The dataset to be opened from the file
-
+    read_shape : Read dataset either as a multi-dimensional array ("normal") or a flattened 1D array ("flat")
+ 
     Returns
     -------
     For a single dataset returns an Arkouda pdarray or Arkouda Strings object
@@ -125,6 +126,7 @@ def read_NetCDF(filename: str, dataset: str) -> Union[pdarray, Strings, Mapping[
             args={
                 "dset": dataset,
                 "filename": filename,
+                "read_shape": read_shape,
             },
     )
 
