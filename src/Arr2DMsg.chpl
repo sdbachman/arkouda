@@ -297,6 +297,7 @@ module Arr2DMsg {
     var repMsg: string;
 
     var name = msgArgs.getValueOf("name");
+    /*
     var axis: int;
     try {
       axis = msgArgs.get("axis").getIntValue();
@@ -304,31 +305,140 @@ module Arr2DMsg {
       var errorMsg = "Error parsing/decoding key";
       gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
     }
+    */
+    var axis = msgArgs.getValueOf("axis");
+    writeln("axis: ", axis);
+    writeln("type: ", axis.type : string);
+
     var inputEntry: borrowed GenSymEntry = getGenericTypedArrayEntry(name, st);
     // TODO: why is this type real when I pass 5?
 
-    // TODO: Select on type
+    // TODO: select on type
     var inputArr = inputEntry: SymEntry2D(real);
     var rname = st.nextName();
 
-    // TODO: select on op and type
-    if axis == 0 { // sum column-wise
-      var numCols = inputArr.n;
-      var res = st.addEntry(rname, numCols, real);
-      forall i in 0..#numCols {
-        res.a[i] = + reduce inputArr.a[.., i];
+    // If no "axis" input argument
+    if (axis == "None") { // sum whole array
+      var res = st.addEntry(rname, 1, real);
+      res.a = + reduce inputArr.a;
+    } 
+    else { // If "axis" is not None
+      var axis_int : int = -1;
+      try { // If "axis" can be cast to an integer
+        var axis_int = axis : int;
+
+        // TODO: select on op and type
+        if axis_int == 0 { // sum column-wise
+          var numCols = inputArr.n;
+          var res = st.addEntry(rname, numCols, real);
+          forall i in 0..#numCols {
+            res.a[i] = + reduce inputArr.a[.., i];
+          }
+        } else if axis_int == 1 { // sum row-wise
+          var numRows = inputArr.m;
+          var res = st.addEntry(rname, numRows, real);
+          forall i in 0..#numRows {
+            res.a[i] = + reduce inputArr.a[i, ..];
+          }
+        } else {
+          var errorMsg = "axis " + axis_int : string + " is out of bounds for array of dimension 2";
+          gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+        }
       }
-    } else {
-      var numRows = inputArr.m;
-      var res = st.addEntry(rname, numRows, real);
-      forall i in 0..#numRows {
-        res.a[i] = + reduce inputArr.a[i, ..];
-      }
-    }
+      catch { // See if "axis" is a tuple
+        if (axis[0] == "(" && axis[axis.size-1] == ")") {
+          var axis_elements = axis.strip("()").split(",");
+          writeln(axis_elements);
+          
+          var axis_int = check_elements(axis_elements);
+          if (axis_int == 1) { // sum column-size
+            var numCols = inputArr.n;
+            var res = st.addEntry(rname, numCols, real);
+            forall i in 0..#numCols {
+              res.a[i] = + reduce inputArr.a[.., i];
+            } 
+          }
+          else if (axis_int == 2) { // sum row-wise
+            var numRows = inputArr.m;
+            var res = st.addEntry(rname, numRows, real);
+            forall i in 0..#numRows {
+              res.a[i] = + reduce inputArr.a[i, ..];
+            }
+          }
+          else if (axis_int == 3) { // sum whole array
+            var res = st.addEntry(rname, 1, real);
+            res.a = + reduce inputArr.a;  
+          }
+          else {
+            var errorMsg = "Problem with input tuple.";
+            gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+          }
+          // Pass to a function that handles the different cases (0,), (1,), (0,1)
+        }
+        else { // If "axis" is not an int or a tuple
+          var errorMsg = "Argument 'axis' is not an int or a tuple."; 
+          gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+          // return error message?
+        }
+      }    
     
+    }
+
     repMsg = "created " + st.attrib(rname);
     return new MsgTuple(repMsg, MsgType.NORMAL);
   }
+
+  proc check_elements(axis_elements) throws {
+    // Can all elements be cast to integers?
+    for element in axis_elements {
+      try {
+        var el_int = element : int;  
+      }
+      catch {
+        writeln("Element included in tuple cannot be cast to an integer.");
+        return 0;
+      }
+    }
+
+    // Are all elements 0 or 1?
+    for element in axis_elements {
+      var el_int = element : int;
+      if (el_int < 0 || el_int > 1) {
+        writeln("axis ", el_int, " is out of bounds for array of dimension 2");
+        return 0;
+      } 
+    }
+
+    var (zero_flag, one_flag) = (0,0);
+    var el_sum = 0;
+    for element in axis_elements {  
+      var el_int = element : int;
+      if (el_int == 0) {
+        if (zero_flag == 0) {
+          el_sum += 1;
+          zero_flag = 1;
+        }
+        else {
+          writeln("duplicate value of 0 in 'axis'");
+          return 0;
+        }
+      }
+
+      if (el_int == 1) {
+        if (one_flag == 0) {
+          el_sum += 2;
+          one_flag = 1;
+        }
+        else {
+          writeln("duplicate value of 1 in 'axis'");
+          return 0;
+        }    
+      }
+    }
+ 
+    return el_sum;
+  }
+
 
   use CommandMap;
   registerFunction("array2d", array2DMsg,getModuleName());

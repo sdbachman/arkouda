@@ -110,7 +110,7 @@ def create_pdarray2D(repMsg : str) -> pdarray2D:
                   "itemsize: {}").format(name, mydtype, size, ndim, shape, itemsize))
     return pdarray2D(name, dtype(mydtype), size, ndim, shape, itemsize)
 
-def sum(pda: pdarray, axis: int) -> pdarray:
+def sum(pda: pdarray, axis: Union[int, tuple]=None) -> pdarray:
     rep_msg = generic_msg(cmd='partialReduction2D', args={"name": pda.name, "axis": axis, "op": "sum"})
     return create_pdarray(rep_msg)
 
