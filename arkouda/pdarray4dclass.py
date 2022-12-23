@@ -28,9 +28,12 @@ from arkouda.dtypes import isSupportedInt
 from arkouda.logger import getArkoudaLogger
 from arkouda.infoclass import list_registry, information, pretty_print_information
 
+from arkouda.pdarray2dclass import create_pdarray2D
+from arkouda.pdarray3dclass import create_pdarray3D
+
 logger = getArkoudaLogger(name='pdarrayclass')
 
-__all__ = ['array4D', 'randint4D'] #, 'reshape']
+__all__ = ['array4D', 'randint4D', 'sum'] #, 'reshape']
 
 class pdarray4D(pdarray):
     objtype = 'pdarray4D'
@@ -231,3 +234,15 @@ def randint4D(low : numeric_scalars, high : numeric_scalars,
 
     repMsg = generic_msg(cmd='randint4d', args={"dtype": cast(np.dtype, dtype).name, "low": lowstr, "high": highstr, "m": m, "n": n, "p": p, "q": q, "seed": seed})
     return create_pdarray4D(repMsg)
+
+def sum(pda: pdarray, axis: Union[int, tuple]=None) -> pdarray:
+    rep_msg = generic_msg(cmd='partialReduction4D', args={"name": pda.name, "axis": axis, "op": "sum"})
+    rep = json.loads(rep_msg)
+
+    item = rep["items"][0]
+    if "pdarray" == item["arkouda_type"]:
+      return create_pdarray(item["created"])
+    elif "pdarray2D" == item["arkouda_type"]:
+      return create_pdarray2D(item["created"])
+    elif "pdarray3D" == item["arkouda_type"]:
+      return create_pdarray3D(item["created"])

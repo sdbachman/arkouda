@@ -1,7 +1,12 @@
 module Arr4DMsg {
   use GenSymIO;
+  use Arr2DMsg;
+  use Arr3DMsg;
+  use SymEntry2D;
+  use SymEntry3D;
   use SymEntry4D;
 
+  use List;
   use ServerConfig;
   use MultiTypeSymbolTable;
   use MultiTypeSymEntry;
@@ -249,8 +254,364 @@ module Arr4DMsg {
     return (tab.getBorrowed(name):borrowed GenSymEntry): SymEntry4D(t);
   }
 
+  proc partialReduction4DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+    var msgArgs = parseMessageArgs(payload, argSize);
+    var repMsg: string;
+
+    var name = msgArgs.getValueOf("name");
+    /*
+    var axis: int;
+    try {
+      axis = msgArgs.get("axis").getIntValue();
+    } catch {
+      var errorMsg = "Error parsing/decoding key";
+      gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+    }
+    */
+    var axis = msgArgs.getValueOf("axis");
+    writeln("axis: ", axis);
+    writeln("type: ", axis.type : string);
+
+    var inputEntry: borrowed GenSymEntry = getGenericTypedArrayEntry(name, st);
+    // TODO: why is this type real when I pass 5?
+
+    // TODO: select on type
+    var inputArr = inputEntry: SymEntry4D(real);
+    var rnames: list((string, string, string));
+    var rname = st.nextName();
+
+    // If no "axis" input argument
+    if (axis == "None") { // sum whole array
+      var res = st.addEntry(rname, 1, real);
+      res.a = + reduce inputArr.a;
+      rnames.append((name, "pdarray", rname));
+    }
+    else { // If "axis" is not None
+      var axis_int : int = -1;
+      try { // If "axis" can be cast to an integer
+        var axis_int = axis : int;
+
+        // TODO: select on op and type
+        if axis_int == 0 {
+          var num_axis1 = inputArr.n;
+          var num_axis2 = inputArr.p;
+          var num_axis3 = inputArr.q;
+          var res = st.addEntry3D(rname, num_axis1, num_axis2, num_axis3, real);
+          forall i in 0..#num_axis1 {
+            for j in 0..#num_axis2 {
+              for k in 0..#num_axis3 {
+                res.a[i,j,k] = + reduce inputArr.a[..,i,j,k];
+              }
+            }
+          }
+          rnames.append((name, "pdarray3D", rname));
+        } else if axis_int == 1 {
+          var num_axis0 = inputArr.m;
+          var num_axis2 = inputArr.p;
+          var num_axis3 = inputArr.q;
+          var res = st.addEntry3D(rname, num_axis0, num_axis2, num_axis3, real);
+          forall i in 0..#num_axis0 {
+            for j in 0..#num_axis2 {
+              for k in 0..#num_axis3 {
+                res.a[i,j,k] = + reduce inputArr.a[i,..,j,k];
+              }
+            }
+          }
+          rnames.append((name, "pdarray3D", rname));
+        }  else if axis_int == 2 {
+          var num_axis0 = inputArr.m;
+          var num_axis1 = inputArr.n;
+          var num_axis3 = inputArr.q;
+          var res = st.addEntry3D(rname, num_axis0, num_axis1, num_axis3, real);
+          forall i in 0..#num_axis0 {
+            for j in 0..#num_axis1 {
+              for k in 0..#num_axis3 {
+                res.a[i,j,k] = + reduce inputArr.a[i,j,..,k];
+              }
+            }
+          }
+          rnames.append((name, "pdarray3D", rname));
+        }  else if axis_int == 3 {
+          var num_axis0 = inputArr.m;
+          var num_axis1 = inputArr.n;
+          var num_axis2 = inputArr.p;
+          var res = st.addEntry3D(rname, num_axis0, num_axis1, num_axis2, real);
+          forall i in 0..#num_axis0 {
+            for j in 0..#num_axis1 {
+              for k in 0..#num_axis2 {
+                res.a[i,j,k] = + reduce inputArr.a[i,j,k,..];
+              }
+            }
+          }
+          rnames.append((name, "pdarray3D", rname));
+        } else {
+          var errorMsg = "axis " + axis_int : string + " is out of bounds for array of dimension 3";
+          gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+        }
+      }
+      catch { // See if "axis" is a tuple
+        if (axis[0] == "(" && axis[axis.size-1] == ")") {
+          var axis_elements = axis.strip("()").split(",");
+
+          var axis_int = check_elements(axis_elements);
+          if (axis_int == 1) {
+            var num_axis1 = inputArr.n;
+            var num_axis2 = inputArr.p;
+            var num_axis3 = inputArr.q;
+            var res = st.addEntry3D(rname, num_axis1, num_axis2, num_axis3, real);
+            forall i in 0..#num_axis1 {
+              for j in 0..#num_axis2 {
+                for k in 0..#num_axis3 {
+                  res.a[i,j,k] = + reduce inputArr.a[..,i,j,k];
+                }
+              }
+            }
+            rnames.append((name, "pdarray3D", rname));
+          }
+          else if (axis_int == 2) {
+            var num_axis0 = inputArr.m;
+            var num_axis2 = inputArr.p;
+            var num_axis3 = inputArr.q;
+            var res = st.addEntry3D(rname, num_axis0, num_axis2, num_axis3, real);
+            forall i in 0..#num_axis0 {
+              for j in 0..#num_axis2 {
+                for k in 0..#num_axis3 {
+                  res.a[i,j,k] = + reduce inputArr.a[i,..,j,k];
+                }
+              }
+            }
+            rnames.append((name, "pdarray3D", rname));
+          }
+          else if (axis_int == 3) {
+            var num_axis2 = inputArr.p;
+            var num_axis3 = inputArr.q;
+            var res = st.addEntry2D(rname, num_axis2, num_axis3, real);
+            forall i in 0..#num_axis2 {
+              for j in 0..#num_axis3 {
+                res.a[i,j] = + reduce inputArr.a[..,..,i,j];
+              }
+            }
+            rnames.append((name, "pdarray2D", rname));
+          }
+          else if (axis_int == 4) {
+            var num_axis0 = inputArr.m;
+            var num_axis1 = inputArr.n;
+            var num_axis3 = inputArr.q;
+            var res = st.addEntry3D(rname, num_axis0, num_axis1, num_axis3, real);
+            forall i in 0..#num_axis0 {
+              for j in 0..#num_axis1 {
+                for k in 0..#num_axis3 {
+                  res.a[i,j,k] = + reduce inputArr.a[i,j,..,k];
+                }
+              }
+            }
+            rnames.append((name, "pdarray3D", rname));
+          }
+          else if (axis_int == 5) {
+            var num_axis1 = inputArr.n;
+            var num_axis3 = inputArr.q;
+            var res = st.addEntry2D(rname, num_axis1, num_axis3, real);
+            forall i in 0..#num_axis1 {
+              for j in 0..#num_axis3 {
+                res.a[i,j] = + reduce inputArr.a[..,i,..,j];
+              }
+            }
+            rnames.append((name, "pdarray2D", rname));
+          }
+          else if (axis_int == 6) {
+            var num_axis0 = inputArr.m;
+            var num_axis3 = inputArr.q;
+            var res = st.addEntry2D(rname, num_axis0, num_axis3, real);
+            forall i in 0..#num_axis0 {
+              for j in 0..#num_axis3 {
+                res.a[i,j] = + reduce inputArr.a[i,..,..,j];
+              }
+            }
+            rnames.append((name, "pdarray2D", rname));
+          }
+          else if (axis_int == 7) {
+            var num_axis3 = inputArr.q;
+            var res = st.addEntry(rname, num_axis3, real);
+            forall i in 0..#num_axis3 {
+              res.a[i] = + reduce inputArr.a[..,..,..,i];
+            }
+            rnames.append((name, "pdarray", rname));
+          }
+          else if (axis_int == 8) {
+            var num_axis0 = inputArr.m;
+            var num_axis1 = inputArr.n;
+            var num_axis2 = inputArr.p;
+            var res = st.addEntry3D(rname, num_axis0, num_axis1, num_axis2, real);
+            forall i in 0..#num_axis0 {
+              for j in 0..#num_axis1 {
+                for k in 0..#num_axis2 {
+                  res.a[i,j,k] = + reduce inputArr.a[i,j,k,..];
+                }
+              }
+            }
+            rnames.append((name, "pdarray3D", rname));
+          }
+          else if (axis_int == 9) {
+            var num_axis1 = inputArr.n;
+            var num_axis2 = inputArr.p;
+            var res = st.addEntry2D(rname, num_axis1, num_axis2, real);
+            forall i in 0..#num_axis1 {
+              for j in 0..#num_axis2 {
+                res.a[i,j] = + reduce inputArr.a[..,i,j,..];
+              }
+            }
+            rnames.append((name, "pdarray2D", rname));
+          }
+          else if (axis_int == 10) {
+            var num_axis0 = inputArr.m;
+            var num_axis2 = inputArr.p;
+            var res = st.addEntry2D(rname, num_axis0, num_axis2, real);
+            forall i in 0..#num_axis0 {
+              for j in 0..#num_axis2 {
+                res.a[i,j] = + reduce inputArr.a[i,..,j,..];
+              }
+            }
+            rnames.append((name, "pdarray2D", rname));
+          }
+          else if (axis_int == 11) {
+            var num_axis2 = inputArr.p;
+            var res = st.addEntry(rname, num_axis2, real);
+            forall i in 0..#num_axis2 {
+              res.a[i] = + reduce inputArr.a[..,..,i,..];
+            }
+            rnames.append((name, "pdarray", rname));
+          }
+          else if (axis_int == 12) {
+            var num_axis0 = inputArr.m;
+            var num_axis1 = inputArr.n;
+            var res = st.addEntry2D(rname, num_axis0, num_axis1, real);
+            forall i in 0..#num_axis0 {
+              for j in 0..#num_axis1 {
+                res.a[i,j] = + reduce inputArr.a[i,j,..,..];
+              }
+            }
+            rnames.append((name, "pdarray2D", rname));
+          }
+          else if (axis_int == 13) {
+            var num_axis1 = inputArr.n;
+            var res = st.addEntry(rname, num_axis1, real);
+            forall i in 0..#num_axis1 {
+              res.a[i] = + reduce inputArr.a[..,i,..,..];
+            }
+            rnames.append((name, "pdarray", rname));
+          }
+          else if (axis_int == 14) {
+            var num_axis0 = inputArr.m;
+            var res = st.addEntry(rname, num_axis0, real);
+            forall i in 0..#num_axis0 {
+              res.a[i] = + reduce inputArr.a[i,..,..,..];
+            }
+            rnames.append((name, "pdarray", rname));
+          }
+          else if (axis_int == 15) { // sum whole array
+            var res = st.addEntry(rname, 1, real);
+            res.a = + reduce inputArr.a;
+            rnames.append((name, "pdarray", rname));
+          }
+          else {
+            var errorMsg = "Problem with input tuple.";
+            gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+          }
+        }
+        else { // If "axis" is not an int or a tuple
+          var errorMsg = "Argument 'axis' is not an int or a tuple.";
+          gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+          // return error message?
+        }
+      }
+
+    }
+
+    var allowErrors = false;
+    var fileErrorCount:int = 0;
+    var fileErrors: list(string);
+    var fileErrorMsg:string = "";
+    repMsg = _buildReadAllMsgJson(rnames, allowErrors, fileErrorCount, fileErrors, st);
+
+    //repMsg = "created " + st.attrib(rname);
+    return new MsgTuple(repMsg, MsgType.NORMAL);
+  }
+
+  proc check_elements(axis_elements) throws {
+    // Can all elements be cast to integers?
+    for element in axis_elements {
+      try {
+        var el_int = element : int;
+      }
+      catch {
+        writeln("Element included in tuple cannot be cast to an integer.");
+        return 0;
+      }
+    }
+
+    // Are all elements 0, 1, 2, or 3?
+    for element in axis_elements {
+      var el_int = element : int;
+      if (el_int < 0 || el_int > 3) {
+        writeln("axis ", el_int, " is out of bounds for array of dimension 4");
+        return 0;
+      }
+    }
+
+    var (zero_flag, one_flag, two_flag, three_flag) = (0,0,0,0);
+    var el_sum = 0;
+    for element in axis_elements {
+      var el_int = element : int;
+      if (el_int == 0) {
+        if (zero_flag == 0) {
+          el_sum += 1;
+          zero_flag = 1;
+        }
+        else {
+          writeln("duplicate value of 0 in 'axis'");
+          return 0;
+        }
+      }
+      if (el_int == 1) {
+        if (one_flag == 0) {
+          el_sum += 2;
+          one_flag = 1;
+        }
+        else {
+          writeln("duplicate value of 1 in 'axis'");
+          return 0;
+        }
+      }
+
+      if (el_int == 2) {
+        if (two_flag == 0) {
+          el_sum += 4;
+          two_flag = 1;
+        }
+        else {
+          writeln("duplicate value of 2 in 'axis'");
+          return 0;
+        }
+      }
+
+      if (el_int == 3) {
+        if (three_flag == 0) {
+          el_sum += 8;
+          three_flag = 1;
+        }
+        else {
+          writeln("duplicate value of 3 in 'axis'");
+          return 0;
+        }
+      }
+    }
+
+    return el_sum;
+  }
+
   use CommandMap;
   registerFunction("array4d", array4DMsg,getModuleName());
   registerFunction("randint4d", randint4DMsg,getModuleName());
   registerFunction("binopvv4d", binopvv4DMsg,getModuleName());
+  registerFunction("partialReduction4D", partialReduction4DMsg, getModuleName());
 }
