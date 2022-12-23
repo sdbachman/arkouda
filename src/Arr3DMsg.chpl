@@ -1,7 +1,10 @@
 module Arr3DMsg {
   use GenSymIO;
+  use Arr2DMsg;
+  use SymEntry2D;
   use SymEntry3D;
 
+  use List;
   use ServerConfig;
   use MultiTypeSymbolTable;
   use MultiTypeSymEntry;
@@ -292,9 +295,237 @@ module Arr3DMsg {
     }
   }
 
+  proc partialReduction3DMsg(cmd: string, payload: string, argSize: int, st: borrowed SymTab): MsgTuple throws {
+    var msgArgs = parseMessageArgs(payload, argSize);
+    var repMsg: string;
+
+    var name = msgArgs.getValueOf("name");
+    /*
+    var axis: int;
+    try {
+      axis = msgArgs.get("axis").getIntValue();
+    } catch {
+      var errorMsg = "Error parsing/decoding key";
+      gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+    }
+    */
+    var axis = msgArgs.getValueOf("axis");
+    writeln("axis: ", axis);
+    writeln("type: ", axis.type : string);
+
+    var inputEntry: borrowed GenSymEntry = getGenericTypedArrayEntry(name, st);
+    // TODO: why is this type real when I pass 5?
+
+    // TODO: select on type
+    var inputArr = inputEntry: SymEntry3D(real);
+    var rnames: list((string, string, string));
+    var rname = st.nextName();
+
+    // If no "axis" input argument
+    if (axis == "None") { // sum whole array
+      var res = st.addEntry(rname, 1, real);
+      res.a = + reduce inputArr.a;
+      rnames.append((name, "pdarray", rname));
+    }
+    else { // If "axis" is not None
+      var axis_int : int = -1;
+      try { // If "axis" can be cast to an integer
+        var axis_int = axis : int;
+
+        // TODO: select on op and type
+        if axis_int == 0 { 
+          var num_axis1 = inputArr.n;
+          var num_axis2 = inputArr.p;
+          var res = st.addEntry2D(rname, num_axis1, num_axis2, real);
+          forall i in 0..#num_axis1 {
+            for j in 0..#num_axis2 {
+              res.a[i,j] = + reduce inputArr.a[..,i,j];
+            }
+          }
+          rnames.append((name, "pdarray2D", rname));
+        } else if axis_int == 1 { 
+          var num_axis0 = inputArr.m;
+          var num_axis2 = inputArr.p;
+          var res = st.addEntry2D(rname, num_axis0, num_axis2, real);
+          forall i in 0..#num_axis0 {
+            for j in 0..#num_axis2 {
+              res.a[i,j] = + reduce inputArr.a[i,..,j];
+            }
+          }
+          rnames.append((name, "pdarray2D", rname));
+        }  else if axis_int == 2 { 
+          var num_axis0 = inputArr.m;
+          var num_axis1 = inputArr.n;
+          var res = st.addEntry2D(rname, num_axis0, num_axis1, real);
+          forall i in 0..#num_axis0 {
+            for j in 0..#num_axis1 {
+              res.a[i,j] = + reduce inputArr.a[i,j,..];
+            }
+          }
+          rnames.append((name, "pdarray2D", rname));
+        } else {
+          var errorMsg = "axis " + axis_int : string + " is out of bounds for array of dimension 3";
+          gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+        }
+      }
+      catch { // See if "axis" is a tuple
+        if (axis[0] == "(" && axis[axis.size-1] == ")") {
+          var axis_elements = axis.strip("()").split(",");
+
+          var axis_int = check_elements(axis_elements);
+          if (axis_int == 1) {
+            var num_axis1 = inputArr.n;
+            var num_axis2 = inputArr.p;
+            var res = st.addEntry2D(rname, num_axis1, num_axis2, real);
+            forall i in 0..#num_axis1 {
+              for j in 0..#num_axis2 {
+                res.a[i,j] = + reduce inputArr.a[..,i,j];
+              }
+            }
+            rnames.append((name, "pdarray2D", rname));
+          }
+          else if (axis_int == 2) {
+            var num_axis0 = inputArr.m;
+            var num_axis2 = inputArr.p;
+            var res = st.addEntry2D(rname, num_axis0, num_axis2, real);
+            forall i in 0..#num_axis0 {
+              for j in 0..#num_axis2 {
+                res.a[i,j] = + reduce inputArr.a[i,..,j];
+              }
+            }
+            rnames.append((name, "pdarray2D", rname));
+          }
+          else if (axis_int == 3) {
+            var num_axis2 = inputArr.p;
+            var res = st.addEntry(rname, num_axis2, real);
+            forall i in 0..#num_axis2 {
+              res.a[i] = + reduce inputArr.a[..,..,i];
+            }
+            rnames.append((name, "pdarray", rname));
+          }
+          else if (axis_int == 4) {
+            var num_axis0 = inputArr.m;
+            var num_axis1 = inputArr.n;
+            var res = st.addEntry2D(rname, num_axis0, num_axis1, real);
+            forall i in 0..#num_axis0 {
+              for j in 0..#num_axis1 {
+                res.a[i,j] = + reduce inputArr.a[i,j,..];
+              }
+            }
+            rnames.append((name, "pdarray2D", rname));
+          }
+          else if (axis_int == 5) {
+            var num_axis1 = inputArr.n;
+            var res = st.addEntry(rname, num_axis1, real);
+            forall i in 0..#num_axis1 {
+              res.a[i] = + reduce inputArr.a[..,i,..];
+            }
+            rnames.append((name, "pdarray", rname));
+          }
+          else if (axis_int == 6) {
+            var num_axis0 = inputArr.m;
+            var res = st.addEntry(rname, num_axis0, real);
+            forall i in 0..#num_axis0 {
+              res.a[i] = + reduce inputArr.a[i,..,..];
+            }
+            rnames.append((name, "pdarray", rname));
+          }
+          else if (axis_int == 7) { // sum whole array
+            var res = st.addEntry(rname, 1, real);
+            res.a = + reduce inputArr.a;
+            rnames.append((name, "pdarray", rname));
+          }
+          else {
+            var errorMsg = "Problem with input tuple.";
+            gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+          }
+        }
+        else { // If "axis" is not an int or a tuple
+          var errorMsg = "Argument 'axis' is not an int or a tuple.";
+          gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+          // return error message?
+        }
+      }   
+
+    }
+
+    var allowErrors = false;
+    var fileErrorCount:int = 0;
+    var fileErrors: list(string);
+    var fileErrorMsg:string = "";
+    repMsg = _buildReadAllMsgJson(rnames, allowErrors, fileErrorCount, fileErrors, st);
+
+    //repMsg = "created " + st.attrib(rname);
+    return new MsgTuple(repMsg, MsgType.NORMAL);
+  }
+
+  proc check_elements(axis_elements) throws {
+    // Can all elements be cast to integers?
+    for element in axis_elements {
+      try {
+        var el_int = element : int;
+      }
+      catch {
+        writeln("Element included in tuple cannot be cast to an integer.");
+        return 0;
+      }
+    }
+
+    // Are all elements 0, 1, or 2?
+    for element in axis_elements {
+      var el_int = element : int;
+      if (el_int < 0 || el_int > 2) {
+        writeln("axis ", el_int, " is out of bounds for array of dimension 3");
+        return 0;
+      }
+    }
+
+    var (zero_flag, one_flag, two_flag) = (0,0,0);
+    var el_sum = 0;
+    for element in axis_elements {
+      var el_int = element : int;
+      if (el_int == 0) {
+        if (zero_flag == 0) {
+          el_sum += 1;
+          zero_flag = 1;
+        }
+        else {
+          writeln("duplicate value of 0 in 'axis'");
+          return 0;
+        }
+      }
+
+      if (el_int == 1) {
+        if (one_flag == 0) {
+          el_sum += 2;
+          one_flag = 1;
+        }
+        else {
+          writeln("duplicate value of 1 in 'axis'");
+          return 0;
+        }   
+      }
+
+      if (el_int == 2) {
+        if (two_flag == 0) {
+          el_sum += 4;
+          two_flag = 1;
+        }
+        else {
+          writeln("duplicate value of 2 in 'axis'");
+          return 0;
+        }   
+      }
+
+    }
+
+    return el_sum;
+  }
+
   use CommandMap;
   registerFunction("array3d", array3DMsg,getModuleName());
   registerFunction("randint3d", randint3DMsg,getModuleName());
   registerFunction("binopvv3d", binopvv3DMsg,getModuleName());
   registerFunction("[int3d]", rowIndex3DMsg,getModuleName());
+  registerFunction("partialReduction3D", partialReduction3DMsg, getModuleName());
 }

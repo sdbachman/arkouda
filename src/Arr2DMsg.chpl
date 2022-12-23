@@ -2,6 +2,7 @@ module Arr2DMsg {
   use GenSymIO;
   use SymEntry2D;
 
+  use List;
   use ServerConfig;
   use MultiTypeSymbolTable;
   use MultiTypeSymEntry;
@@ -315,12 +316,14 @@ module Arr2DMsg {
 
     // TODO: select on type
     var inputArr = inputEntry: SymEntry2D(real);
+    var rnames: list((string, string, string));
     var rname = st.nextName();
 
     // If no "axis" input argument
     if (axis == "None") { // sum whole array
       var res = st.addEntry(rname, 1, real);
       res.a = + reduce inputArr.a;
+      rnames.append((name, "pdarray", rname));
     } 
     else { // If "axis" is not None
       var axis_int : int = -1;
@@ -334,12 +337,14 @@ module Arr2DMsg {
           forall i in 0..#numCols {
             res.a[i] = + reduce inputArr.a[.., i];
           }
+          rnames.append((name, "pdarray", rname));
         } else if axis_int == 1 { // sum row-wise
           var numRows = inputArr.m;
           var res = st.addEntry(rname, numRows, real);
           forall i in 0..#numRows {
             res.a[i] = + reduce inputArr.a[i, ..];
           }
+          rnames.append((name, "pdarray", rname)); 
         } else {
           var errorMsg = "axis " + axis_int : string + " is out of bounds for array of dimension 2";
           gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
@@ -348,7 +353,6 @@ module Arr2DMsg {
       catch { // See if "axis" is a tuple
         if (axis[0] == "(" && axis[axis.size-1] == ")") {
           var axis_elements = axis.strip("()").split(",");
-          writeln(axis_elements);
           
           var axis_int = check_elements(axis_elements);
           if (axis_int == 1) { // sum column-size
@@ -357,6 +361,7 @@ module Arr2DMsg {
             forall i in 0..#numCols {
               res.a[i] = + reduce inputArr.a[.., i];
             } 
+            rnames.append((name, "pdarray", rname));
           }
           else if (axis_int == 2) { // sum row-wise
             var numRows = inputArr.m;
@@ -364,16 +369,17 @@ module Arr2DMsg {
             forall i in 0..#numRows {
               res.a[i] = + reduce inputArr.a[i, ..];
             }
+            rnames.append((name, "pdarray", rname));
           }
           else if (axis_int == 3) { // sum whole array
             var res = st.addEntry(rname, 1, real);
             res.a = + reduce inputArr.a;  
+            rnames.append((name, "pdarray", rname));
           }
           else {
             var errorMsg = "Problem with input tuple.";
             gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
           }
-          // Pass to a function that handles the different cases (0,), (1,), (0,1)
         }
         else { // If "axis" is not an int or a tuple
           var errorMsg = "Argument 'axis' is not an int or a tuple."; 
@@ -384,7 +390,13 @@ module Arr2DMsg {
     
     }
 
-    repMsg = "created " + st.attrib(rname);
+    var allowErrors = false;
+    var fileErrorCount:int = 0;
+    var fileErrors: list(string);
+    var fileErrorMsg:string = "";
+    repMsg = _buildReadAllMsgJson(rnames, allowErrors, fileErrorCount, fileErrors, st);
+
+    //repMsg = "created " + st.attrib(rname);
     return new MsgTuple(repMsg, MsgType.NORMAL);
   }
 

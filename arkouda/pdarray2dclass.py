@@ -112,7 +112,11 @@ def create_pdarray2D(repMsg : str) -> pdarray2D:
 
 def sum(pda: pdarray, axis: Union[int, tuple]=None) -> pdarray:
     rep_msg = generic_msg(cmd='partialReduction2D', args={"name": pda.name, "axis": axis, "op": "sum"})
-    return create_pdarray(rep_msg)
+    rep = json.loads(rep_msg)
+
+    item = rep["items"][0]
+    if "pdarray" == item["arkouda_type"]:
+      return create_pdarray(item["created"])
 
 def array2D(val, m, n, dtype: Union[np.dtype, type, str] = float64) -> Union[pdarray, Strings]:
     """
